@@ -19,6 +19,9 @@ const SKY_RADIUS: f32 = 90.0;
 const GALAXY_RADIUS: f32 = 98.0;
 const BODY_RADIUS: f32 = 78.0;
 const SKY_VERTICAL_FOV_DEGREES: f32 = 60.0;
+const STAR_BATCH_SIZE: usize = 32;
+const GALAXY_BATCH_SIZE: usize = 24;
+const GALAXY_SEGMENTS: usize = 720;
 const POLARIS: Equatorial = Equatorial {
     ra_deg: 37.954_560_67,
     dec_deg: 89.264_108_97,
@@ -84,6 +87,74 @@ struct SceneAssets {
     galaxy: Handle<Mesh>,
 }
 
+#[derive(Default, Resource)]
+struct PendingSkyMeshBuild(Option<SkyMeshBuild>);
+
+struct SkyMeshBuild {
+    latitude_deg: f64,
+    sidereal_time_deg: f64,
+    julian_day: f64,
+    next_star: usize,
+    next_galaxy_segment: usize,
+    stars: MeshBuffers,
+    galaxy: MeshBuffers,
+}
+
+impl SkyMeshBuild {
+    fn new(latitude_deg: f64, sidereal_time_deg: f64, julian_day: f64) -> Self {
+        Self {
+            latitude_deg,
+            sidereal_time_deg,
+            julian_day,
+            next_star: 0,
+            next_galaxy_segment: 0,
+            stars: MeshBuffers::default(),
+            galaxy: MeshBuffers::default(),
+        }
+    }
+
+    fn build_chunk(&mut self, stars: &[Star]) -> bool {
+        let star_end = (self.next_star + STAR_BATCH_SIZE).min(stars.len());
+        append_star_mesh_range(
+            &mut self.stars,
+            stars,
+            self.next_star,
+            star_end,
+            self.latitude_deg,
+            self.sidereal_time_deg,
+            self.julian_day,
+        );
+        self.next_star = star_end;
+
+        let galaxy_end =
+            (self.next_galaxy_segment + GALAXY_BATCH_SIZE).min(GALAXY_SEGMENTS);
+        append_galaxy_mesh_range(
+            &mut self.galaxy,
+            self.next_galaxy_segment,
+            galaxy_end,
+            self.latitude_deg,
+            self.sidereal_time_deg,
+        );
+        self.next_galaxy_segment = galaxy_end;
+
+        self.next_star == stars.len() && self.next_galaxy_segment == GALAXY_SEGMENTS
+    }
+}
+
+#[derive(Default)]
+struct MeshBuffers {
+    positions: Vec<[f32; 3]>,
+    normals: Vec<[f32; 3]>,
+    colors: Vec<[f32; 4]>,
+    indices: Vec<u32>,
+}
+
+impl MeshBuffers {
+    fn into_mesh(self) -> Mesh {
+        create_mesh(self.positions, self.normals, self.colors, self.indices)
+    }
+}
+
 #[derive(Clone, Copy, Component)]
 struct CelestialBody(BodyKind);
 
@@ -110,6 +181,7 @@ fn main() {
         .insert_resource(Observer::default())
         .insert_resource(ViewDirection::default())
         .insert_resource(StarCatalog(load_catalog()))
+        .insert_resource(PendingSkyMeshBuild::default())
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Sky Viewer".to_owned(),
@@ -139,7 +211,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    observer: Res<Observer>,
+    mut observer: ResMut<Observer>,
     catalog: Res<StarCatalog>,
 ) {
     commands.spawn(Camera3dBundle {
@@ -198,6 +270,9 @@ fn setup(
         stars: star_mesh,
         galaxy: galaxy_mesh,
     });
+    // The initial meshes are already built; avoid rebuilding them on the first update.
+    observer.last_refresh = now;
+    observer.force_refresh = false;
 
     let sphere_mesh = meshes.add(
         Sphere::new(0.5)
@@ -447,6 +522,7 @@ fn update_projected_labels(
 
 fn update_sky(
     mut observer: ResMut<Observer>,
+    mut pending_build: ResMut<PendingSkyMeshBuild>,
     view: Res<ViewDirection>,
     catalog: Res<StarCatalog>,
     scene: Res<SceneAssets>,
@@ -467,23 +543,6 @@ fn update_sky(
 
     #[cfg(target_arch = "wasm32")]
     update_coordinate_readout(&view, observer.latitude_deg, sidereal_time);
-
-    if !observer.force_refresh && now - observer.last_refresh < 30.0 {
-        return;
-    }
-
-    *meshes
-        .get_mut(&scene.stars)
-        .expect("the star mesh must remain in the asset store") = build_star_mesh(
-        &catalog.0,
-        observer.latitude_deg,
-        sidereal_time,
-        julian_day,
-    );
-    *meshes
-        .get_mut(&scene.galaxy)
-        .expect("the Milky Way mesh must remain in the asset store") =
-        build_galaxy_mesh(observer.latitude_deg, sidereal_time);
 
     for (body, mut transform, mut visibility) in &mut bodies {
         let position = body_equatorial(body.0, julian_day);
@@ -514,8 +573,31 @@ fn update_sky(
         set_label_transform(&mut transform, horizontal, SKY_RADIUS - 1.5);
     }
 
-    observer.last_refresh = now;
-    observer.force_refresh = false;
+    if observer.force_refresh || now - observer.last_refresh >= 30.0 {
+        pending_build.0 = Some(SkyMeshBuild::new(
+            observer.latitude_deg,
+            sidereal_time,
+            julian_day,
+        ));
+        observer.last_refresh = now;
+        observer.force_refresh = false;
+    }
+
+    if let Some(build) = &mut pending_build.0 {
+        if build.build_chunk(&catalog.0) {
+            let build = pending_build
+                .0
+                .take()
+                .expect("a completed sky mesh build must be pending");
+            *meshes
+                .get_mut(&scene.stars)
+                .expect("the star mesh must remain in the asset store") = build.stars.into_mesh();
+            *meshes
+                .get_mut(&scene.galaxy)
+                .expect("the Milky Way mesh must remain in the asset store") =
+                build.galaxy.into_mesh();
+        }
+    }
 }
 
 fn body_equatorial(kind: BodyKind, julian_day: f64) -> Equatorial {
@@ -532,13 +614,30 @@ fn build_star_mesh(
     sidereal_time_deg: f64,
     julian_day: f64,
 ) -> Mesh {
-    let years_since_j2000 = (julian_day - 2_451_545.0) / 365.25;
-    let mut positions = Vec::new();
-    let mut normals = Vec::new();
-    let mut colors = Vec::new();
-    let mut indices = Vec::new();
+    let mut buffers = MeshBuffers::default();
+    append_star_mesh_range(
+        &mut buffers,
+        stars,
+        0,
+        stars.len(),
+        latitude_deg,
+        sidereal_time_deg,
+        julian_day,
+    );
+    buffers.into_mesh()
+}
 
-    for star in stars {
+fn append_star_mesh_range(
+    buffers: &mut MeshBuffers,
+    stars: &[Star],
+    start: usize,
+    end: usize,
+    latitude_deg: f64,
+    sidereal_time_deg: f64,
+    julian_day: f64,
+) {
+    let years_since_j2000 = (julian_day - 2_451_545.0) / 365.25;
+    for star in &stars[start..end] {
         let position = astro::proper_motion(
             star.ra_hours,
             star.dec_deg,
@@ -554,29 +653,37 @@ fn build_star_mesh(
         let direction = horizontal_vector(horizontal);
         let radius = 0.055 * 10.0_f32.powf(((5.0 - star.magnitude) as f32) * 0.16);
         append_quad(
-            &mut positions,
-            &mut normals,
-            &mut colors,
-            &mut indices,
+            buffers,
             direction * SKY_RADIUS,
             direction,
             radius,
             [1.0, 1.0, 1.0, 1.0],
         );
     }
-    create_mesh(positions, normals, colors, indices)
 }
 
 fn build_galaxy_mesh(latitude_deg: f64, sidereal_time_deg: f64) -> Mesh {
-    let mut positions = Vec::new();
-    let mut normals = Vec::new();
-    let mut colors = Vec::new();
-    let mut indices = Vec::new();
-    let segments = 720;
+    let mut buffers = MeshBuffers::default();
+    append_galaxy_mesh_range(
+        &mut buffers,
+        0,
+        GALAXY_SEGMENTS,
+        latitude_deg,
+        sidereal_time_deg,
+    );
+    buffers.into_mesh()
+}
 
-    for index in 0..segments {
-        let longitude_a = index as f64 * 360.0 / segments as f64;
-        let longitude_b = (index + 1) as f64 * 360.0 / segments as f64;
+fn append_galaxy_mesh_range(
+    buffers: &mut MeshBuffers,
+    start: usize,
+    end: usize,
+    latitude_deg: f64,
+    sidereal_time_deg: f64,
+) {
+    for index in start..end {
+        let longitude_a = index as f64 * 360.0 / GALAXY_SEGMENTS as f64;
+        let longitude_b = (index + 1) as f64 * 360.0 / GALAXY_SEGMENTS as f64;
         let points = [
             astro::galactic_to_equatorial(longitude_a, -7.0),
             astro::galactic_to_equatorial(longitude_b, -7.0),
@@ -590,15 +697,17 @@ fn build_galaxy_mesh(latitude_deg: f64, sidereal_time_deg: f64) -> Mesh {
             continue;
         }
 
-        let first_index = positions.len() as u32;
+        let first_index = buffers.positions.len() as u32;
         for (corner, point) in horizontal.into_iter().enumerate() {
             let direction = horizontal_vector(point);
-            positions.push((direction * GALAXY_RADIUS).to_array());
-            normals.push(direction.to_array());
+            buffers
+                .positions
+                .push((direction * GALAXY_RADIUS).to_array());
+            buffers.normals.push(direction.to_array());
             let alpha = if corner == 0 || corner == 3 { 0.08 } else { 0.19 };
-            colors.push([0.48, 0.50, 0.58, alpha]);
+            buffers.colors.push([0.48, 0.50, 0.58, alpha]);
         }
-        indices.extend_from_slice(&[
+        buffers.indices.extend_from_slice(&[
             first_index,
             first_index + 1,
             first_index + 2,
@@ -607,14 +716,10 @@ fn build_galaxy_mesh(latitude_deg: f64, sidereal_time_deg: f64) -> Mesh {
             first_index + 3,
         ]);
     }
-    create_mesh(positions, normals, colors, indices)
 }
 
 fn append_quad(
-    positions: &mut Vec<[f32; 3]>,
-    normals: &mut Vec<[f32; 3]>,
-    colors: &mut Vec<[f32; 4]>,
-    indices: &mut Vec<u32>,
+    buffers: &mut MeshBuffers,
     center: Vec3,
     direction: Vec3,
     half_size: f32,
@@ -627,18 +732,18 @@ fn append_quad(
     };
     let right = direction.cross(up_axis).normalize();
     let up = right.cross(direction).normalize();
-    let first_index = positions.len() as u32;
+    let first_index = buffers.positions.len() as u32;
     for vertex in [
         center - right * half_size - up * half_size,
         center + right * half_size - up * half_size,
         center + right * half_size + up * half_size,
         center - right * half_size + up * half_size,
     ] {
-        positions.push(vertex.to_array());
-        normals.push(direction.to_array());
-        colors.push(color);
+        buffers.positions.push(vertex.to_array());
+        buffers.normals.push(direction.to_array());
+        buffers.colors.push(color);
     }
-    indices.extend_from_slice(&[
+    buffers.indices.extend_from_slice(&[
         first_index,
         first_index + 1,
         first_index + 2,
@@ -717,5 +822,64 @@ fn update_coordinate_readout(view: &ViewDirection, latitude_deg: f64, sidereal_t
                 &JsValue::from_f64(equatorial.dec_deg),
             );
         }
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn batched_sky_mesh_build_matches_full_mesh_data() {
+        let stars = vec![
+            Star {
+                ra_hours: 2.5,
+                dec_deg: 89.2,
+                magnitude: 1.0,
+                pm_ra: 0.0,
+                pm_dec: 0.0,
+            };
+            STAR_BATCH_SIZE + 1
+        ];
+        let latitude_deg = 47.6062;
+        let sidereal_time_deg = 123.4;
+        let julian_day = 2_461_000.5;
+        let mut build = SkyMeshBuild::new(latitude_deg, sidereal_time_deg, julian_day);
+
+        for chunk in 0..GALAXY_SEGMENTS / GALAXY_BATCH_SIZE {
+            assert_eq!(
+                build.build_chunk(&stars),
+                chunk + 1 == GALAXY_SEGMENTS / GALAXY_BATCH_SIZE
+            );
+        }
+
+        let mut expected_stars = MeshBuffers::default();
+        append_star_mesh_range(
+            &mut expected_stars,
+            &stars,
+            0,
+            stars.len(),
+            latitude_deg,
+            sidereal_time_deg,
+            julian_day,
+        );
+        let mut expected_galaxy = MeshBuffers::default();
+        append_galaxy_mesh_range(
+            &mut expected_galaxy,
+            0,
+            GALAXY_SEGMENTS,
+            latitude_deg,
+            sidereal_time_deg,
+        );
+
+        assert_eq!(build.stars.positions, expected_stars.positions);
+        assert_eq!(build.stars.normals, expected_stars.normals);
+        assert_eq!(build.stars.colors, expected_stars.colors);
+        assert_eq!(build.stars.indices, expected_stars.indices);
+        assert_eq!(build.galaxy.positions, expected_galaxy.positions);
+        assert_eq!(build.galaxy.normals, expected_galaxy.normals);
+        assert_eq!(build.galaxy.colors, expected_galaxy.colors);
+        assert_eq!(build.galaxy.indices, expected_galaxy.indices);
     }
 }
