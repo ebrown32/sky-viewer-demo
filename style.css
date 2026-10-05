@@ -29,8 +29,7 @@ body {
     #05070d;
 }
 
-button,
-a {
+button {
   font: inherit;
 }
 
@@ -94,53 +93,12 @@ a {
   backdrop-filter: blur(14px);
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #f8f8fb;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-decoration: none;
-}
-
-.brand-mark {
-  color: #e5b76e;
-  font-size: 24px;
-}
-
-.brand-light {
-  color: #9da2b2;
-  font-weight: 500;
-}
-
-.location {
-  display: flex;
-  max-width: 34%;
-  align-items: center;
-  gap: 9px;
-  color: #c5c8d2;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: #82ca9a;
-  box-shadow: 0 0 12px rgb(130 202 154 / 60%);
-}
-
 .coordinates {
   display: flex;
+  width: 100%;
   align-items: center;
-  gap: 17px;
+  justify-content: flex-end;
+  gap: 18px;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
@@ -167,22 +125,48 @@ a {
   background: var(--line);
 }
 
-.sky-card {
+.info-panel {
   position: absolute;
-  top: 50%;
-  left: clamp(28px, 8vw, 124px);
-  width: min(370px, calc(100% - 56px));
-  padding: 30px 28px;
+  z-index: 4;
+  top: 92px;
+  left: clamp(16px, 4vw, 42px);
+  width: min(410px, calc(100% - 32px));
+  max-height: calc(100% - 124px);
+  overflow-y: auto;
+  padding: 24px;
   border: 1px solid rgb(255 255 255 / 9%);
-  border-radius: 15px;
-  background: linear-gradient(135deg, rgb(12 15 24 / 86%), rgb(8 10 17 / 65%));
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgb(12 15 24 / 94%), rgb(8 10 17 / 88%));
   box-shadow: 0 24px 75px rgb(0 0 0 / 24%);
-  transform: translateY(-42%);
   backdrop-filter: blur(20px);
 }
 
+.info-panel[hidden] {
+  display: none;
+}
+
+.info-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.info-header .eyebrow {
+  margin-bottom: 10px;
+}
+
+.info-header kbd {
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10px;
+}
+
 .eyebrow {
-  margin: 0 0 19px;
+  margin: 0;
   color: #d4ad72;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 9px;
@@ -191,18 +175,14 @@ a {
 
 h1 {
   margin: 0;
-  font-size: clamp(28px, 3.2vw, 39px);
+  font-size: clamp(22px, 2.5vw, 30px);
   font-weight: 600;
   letter-spacing: -0.055em;
-  line-height: 1.12;
-}
-
-h1 span {
-  color: #969bab;
+  line-height: 1.2;
 }
 
 .intro {
-  margin: 18px 0 25px;
+  margin: 16px 0 19px;
   color: #a9adbb;
   font-size: 13px;
   line-height: 1.75;
@@ -235,6 +215,27 @@ h1 span {
   line-height: 1.55;
 }
 
+.info-details {
+  margin-top: 17px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  color: #a9adbb;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.info-details p {
+  margin: 0 0 9px;
+}
+
+.info-details p:last-child {
+  margin-bottom: 0;
+}
+
+.info-details strong {
+  color: #e6e7ec;
+}
+
 .motion-button {
   width: 100%;
   margin-top: 15px;
@@ -263,63 +264,11 @@ h1 span {
   font-size: 10px;
 }
 
-.object-key {
-  position: absolute;
-  right: 42px;
-  bottom: 71px;
-  display: flex;
-  gap: 19px;
-  color: #aeb2bf;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 10px;
-}
-
-.object-key span {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.object-key i {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-
-.key-star {
-  background: #fff;
-  box-shadow: 0 0 8px rgb(255 255 255 / 75%);
-}
-
-.key-planet {
-  background: #d9a266;
-  box-shadow: 0 0 8px rgb(217 162 102 / 65%);
-}
-
-.key-galaxy {
-  width: 14px !important;
-  height: 3px !important;
-  border-radius: 4px !important;
-  background: #9495a2;
-}
-
-.footer {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  display: flex;
-  min-height: 48px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 42px;
-  border-top: 1px solid var(--line);
-  background: rgb(5 7 13 / 55%);
+.sensor-status {
+  margin: 14px 0 0;
   color: #7d8292;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 9px;
-  letter-spacing: 0.04em;
+  font-size: 10px;
 }
 
 .debug-overlay {
@@ -426,6 +375,14 @@ h1 span {
 }
 
 @media (max-width: 700px) {
+  .info-panel {
+    top: 76px;
+    left: 12px;
+    width: calc(100% - 24px);
+    max-height: calc(100% - 88px);
+    padding: 18px;
+  }
+
   .debug-overlay {
     top: 76px;
     right: 12px;
@@ -434,86 +391,32 @@ h1 span {
   }
 
   .topbar {
-    min-height: 64px;
-    padding: 0 18px;
-  }
-
-  .brand {
-    font-size: 10px;
-  }
-
-  .brand-mark {
-    font-size: 19px;
-  }
-
-  .location {
-    display: none;
+    min-height: 56px;
+    padding: 0 12px;
   }
 
   .coordinates {
-    gap: 9px;
+    justify-content: center;
+    gap: clamp(7px, 3vw, 14px);
   }
 
   .coordinates strong {
-    font-size: 10px;
+    font-size: 9px;
+  }
+
+  .coordinates small {
+    font-size: 8px;
   }
 
   .coordinate-divider {
-    height: 20px;
-  }
-
-  .sky-card {
-    top: auto;
-    bottom: 84px;
-    left: 16px;
-    width: min(340px, calc(100% - 32px));
-    padding: 19px;
-    transform: none;
-  }
-
-  .eyebrow {
-    margin-bottom: 12px;
-    font-size: 8px;
-  }
-
-  h1 {
-    font-size: 27px;
-  }
-
-  .intro {
-    margin: 12px 0 16px;
-    font-size: 12px;
-  }
-
-  .guide {
-    padding-top: 12px;
-  }
-
-  .privacy-note {
-    margin-top: 12px;
-  }
-
-  .object-key {
-    right: 16px;
-    bottom: 63px;
-    gap: 10px;
-    font-size: 8px;
-  }
-
-  .footer {
-    min-height: 38px;
-    padding: 0 16px;
-    font-size: 8px;
+    height: 18px;
   }
 }
 
 @media (max-height: 600px) and (min-width: 701px) {
-  .sky-card {
-    top: 51%;
-    padding: 21px;
-  }
-
-  .intro {
-    margin: 12px 0 16px;
+  .info-panel {
+    top: 82px;
+    max-height: calc(100% - 98px);
+    padding: 18px;
   }
 }

@@ -18,24 +18,23 @@
       <div id="sky-labels" class="sky-labels"></div>
 
       <header class="topbar">
-        <a class="brand" href="/" aria-label="Sky Viewer home">
-          <span class="brand-mark" aria-hidden="true">✦</span>
-          <span>SKY<span class="brand-light">VIEWER</span></span>
-        </a>
-        <div class="location">
-          <span class="status-dot" aria-hidden="true"></span>
-          <span id="location-status">Using Seattle fallback</span>
-        </div>
         <div class="coordinates" aria-live="polite" aria-label="View coordinates">
+          <span><small>LAT</small><strong id="latitude-value">--° --′</strong></span>
+          <span><small>LON</small><strong id="longitude-value">--° --′</strong></span>
           <span><small>RA</small><strong id="ra-value">--h --m</strong></span>
           <span class="coordinate-divider" aria-hidden="true"></span>
           <span><small>DEC</small><strong id="dec-value">--° --′</strong></span>
         </div>
       </header>
 
-      <aside class="sky-card" aria-label="Viewing guidance">
-        <p class="eyebrow">YOUR WINDOW TO THE COSMOS</p>
-        <h1>Look up.<br /><span>The universe is there.</span></h1>
+      <aside id="info-panel" class="info-panel" aria-label="Sky viewer information" hidden>
+        <div class="info-header">
+          <div>
+            <p class="eyebrow">SKY VIEWER</p>
+            <h1>Look up. The universe is there.</h1>
+          </div>
+          <kbd>F2</kbd>
+        </div>
         <p class="intro">
           A live map of the sky above you, with stars, planets, and the Milky Way
           placed where they really are.
@@ -48,13 +47,15 @@
           Enable compass
         </button>
         <p class="privacy-note">Your location stays in this browser.</p>
+        <div class="info-details">
+          <p><strong>Objects:</strong> Stars · Planets · Milky Way</p>
+          <p>Drag to pan the sky. On mobile, enable the compass to follow your device orientation.</p>
+          <p>If location access is unavailable, the view starts from Seattle.</p>
+          <p>Press F3 to view render diagnostics.</p>
+          <p>Sky data: HYG star catalog · JPL orbital elements.</p>
+        </div>
+        <p id="sensor-status" class="sensor-status">Sky view · live</p>
       </aside>
-
-      <div class="object-key" aria-label="Objects in the sky">
-        <span><i class="key-star"></i>Stars</span>
-        <span><i class="key-planet"></i>Planets</span>
-        <span><i class="key-galaxy"></i>Milky Way</span>
-      </div>
 
       <aside id="debug-overlay" class="debug-overlay" aria-label="Performance diagnostics" hidden>
         <div class="debug-header">
@@ -79,10 +80,6 @@
         <div class="debug-graph-legend"><span><i></i>16.7 ms target</span><span>120 frames</span></div>
       </aside>
 
-      <footer class="footer">
-        <span>HYG star catalog · JPL orbital elements</span>
-        <span id="sensor-status">SKY VIEW · LIVE</span>
-      </footer>
     </main>
 
     <script>
@@ -220,9 +217,16 @@
         };
 
         window.addEventListener("keydown", (event) => {
-          if (event.code !== "F3") return;
-          event.preventDefault();
-          if (!event.repeat) setDebugOpen(!debugOpen);
+          if (event.code === "F2") {
+            event.preventDefault();
+            if (!event.repeat) {
+              const infoPanel = $("info-panel");
+              infoPanel.hidden = !infoPanel.hidden;
+            }
+          } else if (event.code === "F3") {
+            event.preventDefault();
+            if (!event.repeat) setDebugOpen(!debugOpen);
+          }
         });
 
         const seattle = { latitude: 47.6062, longitude: -122.3321 };
@@ -278,18 +282,13 @@
             ({ coords }) => {
               state.latitude = coords.latitude;
               state.longitude = coords.longitude;
-              $("location-status").textContent =
-                `${coords.latitude.toFixed(2)}°, ${coords.longitude.toFixed(2)}°`;
             },
             () => {
               state.latitude = seattle.latitude;
               state.longitude = seattle.longitude;
-              $("location-status").textContent = "Seattle fallback · location unavailable";
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
           );
-        } else {
-          $("location-status").textContent = "Seattle fallback · location unavailable";
         }
 
         let orientationListening = false;
@@ -366,6 +365,8 @@
           if (Number.isFinite(state.declination)) {
             $("dec-value").textContent = formatDec(state.declination);
           }
+          $("latitude-value").textContent = `${state.latitude.toFixed(2)}°`;
+          $("longitude-value").textContent = `${state.longitude.toFixed(2)}°`;
           const activeLabels = new Set();
           for (const [name, x, y, red, green, blue] of state.projectedLabels) {
             let label = projectedLabels.get(name);
