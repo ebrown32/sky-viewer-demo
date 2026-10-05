@@ -18,6 +18,7 @@ use bevy::{
 const SKY_RADIUS: f32 = 90.0;
 const GALAXY_RADIUS: f32 = 98.0;
 const BODY_RADIUS: f32 = 78.0;
+const SKY_VERTICAL_FOV_DEGREES: f32 = 60.0;
 const POLARIS: Equatorial = Equatorial {
     ra_deg: 37.954_560_67,
     dec_deg: 89.264_108_97,
@@ -130,7 +131,14 @@ fn setup(
     observer: Res<Observer>,
     catalog: Res<StarCatalog>,
 ) {
-    commands.spawn(Camera3dBundle::default());
+    commands.spawn(Camera3dBundle {
+        projection: PerspectiveProjection {
+            fov: SKY_VERTICAL_FOV_DEGREES.to_radians(),
+            ..default()
+        }
+        .into(),
+        ..default()
+    });
 
     let now = unix_seconds();
     let julian_day = astro::julian_date(now);
@@ -208,7 +216,7 @@ fn setup(
                 text: Text::from_section(
                     name,
                     TextStyle {
-                        font_size: 16.0,
+                        font_size: 20.0,
                         color: Color::WHITE,
                         ..default()
                     },
@@ -226,7 +234,7 @@ fn setup(
                 text: Text::from_section(
                     name,
                     TextStyle {
-                        font_size: 16.0,
+                        font_size: 20.0,
                         color: Color::WHITE,
                         ..default()
                     },
@@ -244,7 +252,7 @@ fn setup(
             text: Text::from_section(
                 "Milky Way",
                 TextStyle {
-                    font_size: 18.0,
+                    font_size: 20.0,
                     color: Color::srgb(0.72, 0.74, 0.82),
                     ..default()
                 },
