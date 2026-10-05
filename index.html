@@ -51,10 +51,26 @@
           <p><strong>Objects:</strong> Stars · Planets · Milky Way</p>
           <p>Drag to pan the sky. On mobile, enable the compass to follow your device orientation.</p>
           <p>If location access is unavailable, the view starts from Seattle.</p>
+          <p>Press F4 to toggle object label categories.</p>
           <p>Press F3 to view render diagnostics.</p>
           <p>Sky data: HYG star catalog · JPL orbital elements.</p>
         </div>
         <p id="sensor-status" class="sensor-status">Sky view · live</p>
+      </aside>
+
+      <aside id="label-panel" class="label-panel" aria-label="Object label visibility" hidden>
+        <div class="label-panel-header">
+          <strong>Label visibility</strong>
+          <kbd>F4</kbd>
+        </div>
+        <label><input type="checkbox" data-label-category="sun-moon" checked /> Sun/moon</label>
+        <label><input type="checkbox" data-label-category="planets" checked /> Planets</label>
+        <label><input type="checkbox" data-label-category="constellations" checked /> Constellations</label>
+        <label>
+          <input type="checkbox" data-label-category="zero-or-higher-stars" checked />
+          Stars of 0 magnitude or higher
+        </label>
+        <label><input type="checkbox" data-label-category="all-stars" checked /> All stars</label>
       </aside>
 
       <aside id="debug-overlay" class="debug-overlay" aria-label="Performance diagnostics" hidden>
@@ -223,6 +239,12 @@
               const infoPanel = $("info-panel");
               infoPanel.hidden = !infoPanel.hidden;
             }
+          } else if (event.code === "F4") {
+            event.preventDefault();
+            if (!event.repeat) {
+              const labelPanel = $("label-panel");
+              labelPanel.hidden = !labelPanel.hidden;
+            }
           } else if (event.code === "F3") {
             event.preventDefault();
             if (!event.repeat) setDebugOpen(!debugOpen);
@@ -242,6 +264,27 @@
           projectedLabels: [],
         });
         const projectedLabels = new Map();
+        const labelCategories = {
+          "sun-moon": true,
+          planets: true,
+          constellations: true,
+          "zero-or-higher-stars": true,
+          "all-stars": true,
+        };
+        const labelsAllowed = (category, magnitude) => {
+          if (category === "star") {
+            return (
+              labelCategories["all-stars"] ||
+              (labelCategories["zero-or-higher-stars"] && magnitude >= 0)
+            );
+          }
+          return category === "always" || labelCategories[category];
+        };
+        document.querySelectorAll("[data-label-category]").forEach((input) => {
+          input.addEventListener("change", () => {
+            labelCategories[input.dataset.labelCategory] = input.checked;
+          });
+        });
         const isMobile =
           matchMedia("(pointer: coarse)").matches ||
           "ontouchstart" in window;
@@ -368,7 +411,16 @@
           $("latitude-value").textContent = `${state.latitude.toFixed(2)}°`;
           $("longitude-value").textContent = `${state.longitude.toFixed(2)}°`;
           const activeLabels = new Set();
-          for (const [name, x, y, red, green, blue] of state.projectedLabels) {
+          for (const [
+            name,
+            x,
+            y,
+            red,
+            green,
+            blue,
+            category,
+            magnitude,
+          ] of state.projectedLabels) {
             let label = projectedLabels.get(name);
             if (!label) {
               label = document.createElement("span");
@@ -383,7 +435,7 @@
               y >= 0 &&
               x <= $("sky-canvas").clientWidth &&
               y <= $("sky-canvas").clientHeight;
-            label.hidden = !inView;
+            label.hidden = !inView || !labelsAllowed(category, magnitude);
             if (inView) {
               label.style.left = `${x}px`;
               label.style.top = `${y}px`;

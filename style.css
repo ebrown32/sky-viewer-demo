@@ -258,6 +258,61 @@ h1 {
   display: none;
 }
 
+.label-panel {
+  position: absolute;
+  z-index: 4;
+  top: 92px;
+  right: clamp(16px, 4vw, 42px);
+  display: grid;
+  width: min(310px, calc(100% - 32px));
+  gap: 13px;
+  padding: 18px;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 12px;
+  background: rgb(8 10 17 / 92%);
+  box-shadow: 0 24px 75px rgb(0 0 0 / 24%);
+  color: #d0d2da;
+  font-size: 12px;
+  backdrop-filter: blur(20px);
+}
+
+.label-panel[hidden] {
+  display: none;
+}
+
+.label-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+  color: #f3f3f7;
+}
+
+.label-panel-header kbd {
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 9px;
+}
+
+.label-panel label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.label-panel input {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: #d4ad72;
+}
+
 .privacy-note {
   margin: 18px 0 0;
   color: #6f7485;
@@ -388,6 +443,12 @@ h1 {
     right: 12px;
     width: min(320px, calc(100% - 24px));
     padding: 12px;
+  }
+
+  .label-panel {
+    top: 76px;
+    right: 12px;
+    width: min(310px, calc(100% - 24px));
   }
 
   .topbar {

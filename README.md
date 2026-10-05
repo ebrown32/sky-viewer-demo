@@ -3,8 +3,8 @@
 A single-page 3D view of the night sky built with Rust, WebAssembly, and Bevy.
 It uses the browser's location when permitted and otherwise starts from Seattle.
 On phones and tablets, the optional compass view follows device orientation;
-on desktop, drag the sky with the mouse. Press F2 to view sky viewer information
-and F3 to toggle render diagnostics, including draw calls and a frame-timing graph.
+on desktop, drag the sky with the mouse. Press F2 to view sky viewer information,
+F3 to toggle render diagnostics, and F4 to toggle object label categories.
 
 ## Run locally
 

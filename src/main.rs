@@ -163,10 +163,34 @@ struct CelestialBody(BodyKind);
 struct ProjectedLabel {
     name: &'static str,
     color: Color,
+    category: LabelCategory,
+    magnitude: Option<f64>,
 }
 
 #[derive(Clone, Copy, Component)]
 struct SkyLabel(Equatorial);
+
+#[derive(Clone, Copy)]
+enum LabelCategory {
+    SunMoon,
+    Planet,
+    Constellation,
+    Star,
+    Always,
+}
+
+impl LabelCategory {
+    #[cfg(target_arch = "wasm32")]
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::SunMoon => "sun-moon",
+            Self::Planet => "planets",
+            Self::Constellation => "constellations",
+            Self::Star => "star",
+            Self::Always => "always",
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 enum BodyKind {
@@ -296,17 +320,219 @@ fn setup(
                 ..default()
             },
             CelestialBody(kind),
-            ProjectedLabel { name, color },
+            ProjectedLabel {
+                name,
+                color,
+                category: match kind {
+                    BodyKind::Sun | BodyKind::Moon => LabelCategory::SunMoon,
+                    BodyKind::Planet(_) => LabelCategory::Planet,
+                },
+                magnitude: None,
+            },
         ));
     }
 
-    for (name, position) in [("Polaris", POLARIS), ("Betelgeuse", BETELGEUSE)] {
+    let named_stars = [
+        ("Polaris", POLARIS, 1.98),
+        ("Betelgeuse", BETELGEUSE, 0.42),
+        (
+            "Sirius",
+            Equatorial {
+                ra_deg: 101.287,
+                dec_deg: -16.716,
+            },
+            -1.46,
+        ),
+        (
+            "Canopus",
+            Equatorial {
+                ra_deg: 95.988,
+                dec_deg: -52.696,
+            },
+            -0.74,
+        ),
+        (
+            "Rigil Kentaurus",
+            Equatorial {
+                ra_deg: 219.902,
+                dec_deg: -60.834,
+            },
+            -0.27,
+        ),
+        (
+            "Arcturus",
+            Equatorial {
+                ra_deg: 213.915,
+                dec_deg: 19.182,
+            },
+            -0.05,
+        ),
+        (
+            "Vega",
+            Equatorial {
+                ra_deg: 279.235,
+                dec_deg: 38.784,
+            },
+            0.03,
+        ),
+        (
+            "Capella",
+            Equatorial {
+                ra_deg: 79.172,
+                dec_deg: 45.998,
+            },
+            0.08,
+        ),
+        (
+            "Rigel",
+            Equatorial {
+                ra_deg: 78.634,
+                dec_deg: -8.202,
+            },
+            0.13,
+        ),
+        (
+            "Procyon",
+            Equatorial {
+                ra_deg: 114.825,
+                dec_deg: 5.225,
+            },
+            0.34,
+        ),
+        (
+            "Achernar",
+            Equatorial {
+                ra_deg: 24.429,
+                dec_deg: -57.237,
+            },
+            0.46,
+        ),
+        (
+            "Hadar",
+            Equatorial {
+                ra_deg: 210.956,
+                dec_deg: -60.373,
+            },
+            0.61,
+        ),
+        (
+            "Altair",
+            Equatorial {
+                ra_deg: 297.696,
+                dec_deg: 8.868,
+            },
+            0.77,
+        ),
+        (
+            "Acrux",
+            Equatorial {
+                ra_deg: 186.65,
+                dec_deg: -63.10,
+            },
+            0.76,
+        ),
+        (
+            "Aldebaran",
+            Equatorial {
+                ra_deg: 68.98,
+                dec_deg: 16.51,
+            },
+            0.85,
+        ),
+        (
+            "Spica",
+            Equatorial {
+                ra_deg: 201.298,
+                dec_deg: -11.16,
+            },
+            0.98,
+        ),
+        (
+            "Antares",
+            Equatorial {
+                ra_deg: 247.35,
+                dec_deg: -26.43,
+            },
+            1.06,
+        ),
+        (
+            "Pollux",
+            Equatorial {
+                ra_deg: 116.329,
+                dec_deg: 28.026,
+            },
+            1.14,
+        ),
+        (
+            "Fomalhaut",
+            Equatorial {
+                ra_deg: 344.412,
+                dec_deg: -29.622,
+            },
+            1.16,
+        ),
+        (
+            "Deneb",
+            Equatorial {
+                ra_deg: 310.358,
+                dec_deg: 45.280,
+            },
+            1.25,
+        ),
+        (
+            "Regulus",
+            Equatorial {
+                ra_deg: 152.093,
+                dec_deg: 11.967,
+            },
+            1.35,
+        ),
+        (
+            "Castor",
+            Equatorial {
+                ra_deg: 113.650,
+                dec_deg: 31.888,
+            },
+            1.58,
+        ),
+    ];
+    for (name, position, magnitude) in named_stars {
         commands.spawn((
             SpatialBundle::default(),
             SkyLabel(position),
             ProjectedLabel {
                 name,
                 color: Color::WHITE,
+                category: LabelCategory::Star,
+                magnitude: Some(magnitude),
+            },
+        ));
+    }
+
+    let constellations = [
+        ("Andromeda", 11.25, 37.0),
+        ("Aquarius", 335.0, -10.0),
+        ("Cassiopeia", 15.0, 60.0),
+        ("Cygnus", 308.75, 42.0),
+        ("Gemini", 105.0, 22.0),
+        ("Leo", 157.5, 15.0),
+        ("Lyra", 282.5, 36.0),
+        ("Orion", 83.75, -1.0),
+        ("Pegasus", 337.5, 20.0),
+        ("Scorpius", 247.5, -30.0),
+        ("Taurus", 67.5, 18.0),
+        ("Ursa Major", 165.0, 55.0),
+        ("Ursa Minor", 225.0, 75.0),
+    ];
+    for (name, ra_deg, dec_deg) in constellations {
+        commands.spawn((
+            SpatialBundle::default(),
+            SkyLabel(Equatorial { ra_deg, dec_deg }),
+            ProjectedLabel {
+                name,
+                color: Color::srgb(0.72, 0.74, 0.82),
+                category: LabelCategory::Constellation,
+                magnitude: None,
             },
         ));
     }
@@ -318,6 +544,8 @@ fn setup(
         ProjectedLabel {
             name: "Milky Way",
             color: Color::srgb(0.72, 0.74, 0.82),
+            category: LabelCategory::Always,
+            magnitude: None,
         },
     ));
 }
@@ -504,6 +732,8 @@ fn update_projected_labels(
                 projected_label.push(&JsValue::from_f64(color.red as f64));
                 projected_label.push(&JsValue::from_f64(color.green as f64));
                 projected_label.push(&JsValue::from_f64(color.blue as f64));
+                projected_label.push(&JsValue::from_str(label.category.as_str()));
+                projected_label.push(&JsValue::from_f64(label.magnitude.unwrap_or(f64::NAN)));
                 projected_labels.push(projected_label.as_ref());
             }
         }
