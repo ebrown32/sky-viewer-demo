@@ -727,9 +727,20 @@ fn update_projected_labels(
         use wasm_bindgen::JsValue;
 
         let projected_labels = js_sys::Array::new();
+        let objects = js_sys::Array::new();
         if let Ok((camera, transform)) = cameras.get_single() {
             let camera_transform = GlobalTransform::from(*transform);
             for (label, transform, visibility) in &labels {
+                let direction = transform.translation.normalize();
+                let heading = (direction.x.atan2(direction.z).to_degrees() as f64)
+                    .rem_euclid(360.0);
+                let altitude = direction.y.clamp(-1.0, 1.0).asin().to_degrees() as f64;
+                let object = js_sys::Array::new();
+                object.push(&JsValue::from_str(label.name));
+                object.push(&JsValue::from_f64(heading));
+                object.push(&JsValue::from_f64(altitude));
+                objects.push(object.as_ref());
+
                 if *visibility != Visibility::Visible {
                     continue;
                 }
@@ -759,6 +770,7 @@ fn update_projected_labels(
                     &JsValue::from_str("projectedLabels"),
                     projected_labels.as_ref(),
                 );
+                let _ = Reflect::set(&state, &JsValue::from_str("objects"), objects.as_ref());
             }
         }
     }
@@ -1057,8 +1069,20 @@ fn update_coordinate_readout(view: &ViewDirection, latitude_deg: f64, sidereal_t
     };
     let equatorial =
         astro::horizontal_to_equatorial(horizontal, latitude_deg, sidereal_time_deg);
+    let heading = (view.azimuth_rad.to_degrees() as f64).rem_euclid(360.0);
+    let altitude = view.altitude_rad.to_degrees() as f64;
     if let Some(window) = web_sys::window() {
         if let Ok(state) = Reflect::get(window.as_ref(), &JsValue::from_str("skyState")) {
+            let _ = Reflect::set(
+                &state,
+                &JsValue::from_str("heading"),
+                &JsValue::from_f64(heading),
+            );
+            let _ = Reflect::set(
+                &state,
+                &JsValue::from_str("altitude"),
+                &JsValue::from_f64(altitude),
+            );
             let _ = Reflect::set(
                 &state,
                 &JsValue::from_str("rightAscension"),

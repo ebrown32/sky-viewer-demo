@@ -64,6 +64,20 @@
           <strong>Label visibility</strong>
           <kbd>F4</kbd>
         </div>
+        <div class="object-search">
+          <label for="object-search">Find an object</label>
+          <input
+            id="object-search"
+            type="search"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="object-suggestions"
+            aria-expanded="false"
+            placeholder="Search the sky"
+            autocomplete="off"
+          />
+          <div id="object-suggestions" class="object-suggestions" role="listbox" hidden></div>
+        </div>
         <label><input type="checkbox" data-label-category="sun-moon" checked /> Sun/moon</label>
         <label><input type="checkbox" data-label-category="planets" checked /> Planets</label>
         <label><input type="checkbox" data-label-category="constellations" checked /> Constellations</label>
@@ -263,6 +277,7 @@
           sensorAbsolute: false,
           rightAscension: null,
           declination: null,
+          objects: [],
           projectedLabels: [],
         });
         const projectedLabels = new Map();
@@ -287,6 +302,86 @@
           input.addEventListener("change", () => {
             labelCategories[input.dataset.labelCategory] = input.checked;
           });
+        });
+        const objectSearch = $("object-search");
+        const objectSuggestions = $("object-suggestions");
+        let activeTurn = null;
+        let searchOverride = false;
+        let turnFinishTimeout = 0;
+        let objectIndexReady = false;
+
+        const hideSuggestions = () => {
+          objectSuggestions.hidden = true;
+          objectSearch.setAttribute("aria-expanded", "false");
+        };
+        const turnToObject = (object) => {
+          const heading = Number(object[1]);
+          const altitude = Number(object[2]);
+          if (!Number.isFinite(heading) || !Number.isFinite(altitude)) return;
+          window.clearTimeout(turnFinishTimeout);
+          const currentHeading = ((state.heading % 360) + 360) % 360;
+          activeTurn = {
+            startHeading: currentHeading,
+            startAltitude: state.altitude,
+            headingDelta: ((heading - currentHeading + 540) % 360) - 180,
+            targetHeading: heading,
+            targetAltitude: Math.max(-85, Math.min(85, altitude)),
+            startedAt: performance.now(),
+          };
+          state.sensorActive = false;
+          state.manualActive = true;
+          searchOverride = true;
+          objectSearch.value = object[0];
+          hideSuggestions();
+        };
+        const renderSuggestions = () => {
+          const query = objectSearch.value.trim().toLocaleLowerCase();
+          objectSuggestions.replaceChildren();
+          if (!query) {
+            hideSuggestions();
+            return;
+          }
+          const matches = state.objects
+            .filter((object) => object[0].toLocaleLowerCase().includes(query))
+            .sort((left, right) => {
+              const leftStarts = left[0].toLocaleLowerCase().startsWith(query);
+              const rightStarts = right[0].toLocaleLowerCase().startsWith(query);
+              return Number(rightStarts) - Number(leftStarts) || left[0].localeCompare(right[0]);
+            })
+            .slice(0, 8);
+          if (matches.length === 0) {
+            hideSuggestions();
+            return;
+          }
+          for (const object of matches) {
+            const option = document.createElement("button");
+            option.type = "button";
+            option.setAttribute("role", "option");
+            option.textContent = object[0];
+            option.addEventListener("pointerdown", (event) => event.preventDefault());
+            option.addEventListener("click", () => turnToObject(object));
+            objectSuggestions.append(option);
+          }
+          objectSuggestions.hidden = false;
+          objectSearch.setAttribute("aria-expanded", "true");
+        };
+        objectSearch.addEventListener("input", renderSuggestions);
+        objectSearch.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            hideSuggestions();
+          } else if (event.key === "Enter" && !objectSuggestions.hidden) {
+            const firstOption = objectSuggestions.querySelector('[role="option"]');
+            if (firstOption) {
+              event.preventDefault();
+              firstOption.click();
+            }
+          }
+        });
+        $("sky-canvas").addEventListener("pointerdown", () => {
+          activeTurn = null;
+          searchOverride = false;
+          window.clearTimeout(turnFinishTimeout);
+          state.manualActive = false;
         });
         const isMobile =
           matchMedia("(pointer: coarse)").matches ||
@@ -339,6 +434,7 @@
 
         let orientationListening = false;
         const onOrientation = (event) => {
+          if (searchOverride) return;
           if (event.alpha === null || event.beta === null) {
             $("sensor-status").textContent = "COMPASS DATA UNAVAILABLE";
             return;
@@ -359,6 +455,10 @@
 
         motionButton.addEventListener("click", async () => {
           try {
+            searchOverride = false;
+            state.manualActive = false;
+            activeTurn = null;
+            window.clearTimeout(turnFinishTimeout);
             const orientation = window.DeviceOrientationEvent;
             if (
               orientation &&
@@ -405,6 +505,27 @@
           return `${sign}${String(wholeDegrees).padStart(2, "0")}° ${String(minutes).padStart(2, "0")}′`;
         };
         const updateReadout = () => {
+          if (!objectIndexReady && state.objects.length > 0) {
+            objectIndexReady = true;
+            if (objectSearch.value.trim()) renderSuggestions();
+          }
+          if (activeTurn) {
+            const progress = Math.min(1, (performance.now() - activeTurn.startedAt) / 1100);
+            const easedProgress = progress * progress * (3 - 2 * progress);
+            state.heading =
+              (activeTurn.startHeading + activeTurn.headingDelta * easedProgress + 360) % 360;
+            state.altitude =
+              activeTurn.startAltitude +
+              (activeTurn.targetAltitude - activeTurn.startAltitude) * easedProgress;
+            if (progress >= 1) {
+              state.heading = activeTurn.targetHeading;
+              state.altitude = activeTurn.targetAltitude;
+              activeTurn = null;
+              turnFinishTimeout = window.setTimeout(() => {
+                state.manualActive = false;
+              }, 100);
+            }
+          }
           if (Number.isFinite(state.rightAscension)) {
             $("ra-value").textContent = formatRa(state.rightAscension);
           }

@@ -265,6 +265,8 @@ h1 {
   right: clamp(16px, 4vw, 42px);
   display: grid;
   width: min(310px, calc(100% - 32px));
+  max-height: calc(100% - 112px);
+  overflow-y: auto;
   gap: 13px;
   padding: 18px;
   border: 1px solid rgb(255 255 255 / 9%);
@@ -311,6 +313,62 @@ h1 {
   flex: 0 0 auto;
   margin: 0;
   accent-color: #d4ad72;
+}
+
+.object-search {
+  display: grid;
+  gap: 6px;
+}
+
+.label-panel .object-search label {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.object-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  outline: none;
+  background: rgb(255 255 255 / 4%);
+  color: #f3f3f7;
+  font-size: 12px;
+}
+
+.object-search input:focus {
+  border-color: rgb(229 183 110 / 65%);
+}
+
+.object-suggestions {
+  display: grid;
+  max-height: 176px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0c0f18;
+}
+
+.object-suggestions[hidden] {
+  display: none;
+}
+
+.object-suggestions button {
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: #d0d2da;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+}
+
+.object-suggestions button:hover,
+.object-suggestions button:focus {
+  outline: none;
+  background: rgb(229 183 110 / 12%);
+  color: #fff;
 }
 
 .privacy-note {
@@ -449,6 +507,7 @@ h1 {
     top: 76px;
     right: 12px;
     width: min(310px, calc(100% - 24px));
+    max-height: calc(100% - 88px);
   }
 
   .topbar {
