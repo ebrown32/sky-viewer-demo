@@ -177,7 +177,7 @@ enum LabelCategory {
     Constellation,
     Star,
     SagittariusA,
-    Always,
+    Galaxy,
 }
 
 impl LabelCategory {
@@ -189,7 +189,7 @@ impl LabelCategory {
             Self::Constellation => "constellations",
             Self::Star => "star",
             Self::SagittariusA => "sagittarius-a",
-            Self::Always => "always",
+            Self::Galaxy => "galaxies",
         }
     }
 }
@@ -562,7 +562,7 @@ fn setup(
         ProjectedLabel {
             name: "Milky Way",
             color: Color::srgb(0.72, 0.74, 0.82),
-            category: LabelCategory::Always,
+            category: LabelCategory::Galaxy,
             magnitude: None,
         },
     ));

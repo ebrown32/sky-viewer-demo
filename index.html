@@ -88,6 +88,7 @@
         </label>
         <label><input type="checkbox" data-label-category="all-stars" checked /> All stars</label>
         <label><input type="checkbox" data-label-category="sagittarius-a" checked /> Sagittarius A*</label>
+        <label><input type="checkbox" data-label-category="galaxies" checked /> Galaxies</label>
       </aside>
 
       <aside id="debug-overlay" class="debug-overlay" aria-label="Performance diagnostics" hidden>
@@ -289,6 +290,7 @@
           "zero-or-higher-stars": true,
           "all-stars": true,
           "sagittarius-a": true,
+          galaxies: true,
         };
         const labelsAllowed = (category, magnitude) => {
           if (category === "star") {
@@ -297,7 +299,7 @@
               (labelCategories["zero-or-higher-stars"] && magnitude >= 0)
             );
           }
-          return category === "always" || labelCategories[category];
+          return labelCategories[category];
         };
         document.querySelectorAll("[data-label-category]").forEach((input) => {
           input.addEventListener("change", () => {
