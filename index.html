@@ -71,6 +71,7 @@
           Stars of 0 magnitude or higher
         </label>
         <label><input type="checkbox" data-label-category="all-stars" checked /> All stars</label>
+        <label><input type="checkbox" data-label-category="sagittarius-a" checked /> Sagittarius A*</label>
       </aside>
 
       <aside id="debug-overlay" class="debug-overlay" aria-label="Performance diagnostics" hidden>
@@ -270,6 +271,7 @@
           constellations: true,
           "zero-or-higher-stars": true,
           "all-stars": true,
+          "sagittarius-a": true,
         };
         const labelsAllowed = (category, magnitude) => {
           if (category === "star") {

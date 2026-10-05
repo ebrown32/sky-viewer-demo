@@ -176,6 +176,7 @@ enum LabelCategory {
     Planet,
     Constellation,
     Star,
+    SagittariusA,
     Always,
 }
 
@@ -187,6 +188,7 @@ impl LabelCategory {
             Self::Planet => "planets",
             Self::Constellation => "constellations",
             Self::Star => "star",
+            Self::SagittariusA => "sagittarius-a",
             Self::Always => "always",
         }
     }
@@ -536,6 +538,18 @@ fn setup(
             },
         ));
     }
+
+    let sagittarius_a = astro::galactic_to_equatorial(0.0, 0.0);
+    commands.spawn((
+        SpatialBundle::default(),
+        SkyLabel(sagittarius_a),
+        ProjectedLabel {
+            name: "Sagittarius A*",
+            color: Color::srgb(0.94, 0.68, 0.36),
+            category: LabelCategory::SagittariusA,
+            magnitude: None,
+        },
+    ));
 
     let milky_way_label = astro::galactic_to_equatorial(95.0, 4.0);
     commands.spawn((
