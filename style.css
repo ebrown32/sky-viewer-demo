@@ -147,6 +147,54 @@ button {
   outline-offset: 3px;
 }
 
+.startup-actions form {
+  display: grid;
+  gap: 14px;
+}
+
+.startup-coordinate-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.startup-coordinate-fields label {
+  display: grid;
+  gap: 7px;
+  color: #a9adbb;
+  font-size: 12px;
+}
+
+.startup-coordinate-fields input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 4%);
+  color: #f3f3f7;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.startup-coordinate-fields input:focus-visible {
+  outline: 2px solid #e4c596;
+  outline-offset: 2px;
+}
+
+.startup-location-option {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.startup-location-option > span {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
 #sky-canvas {
   position: absolute;
   inset: 0;
