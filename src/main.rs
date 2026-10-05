@@ -194,6 +194,10 @@ impl LabelCategory {
     }
 }
 
+fn remains_visible_below_horizon(category: LabelCategory) -> bool {
+    matches!(category, LabelCategory::Star | LabelCategory::SagittariusA)
+}
+
 #[derive(Clone, Copy)]
 enum BodyKind {
     Sun,
@@ -822,7 +826,7 @@ fn update_sky(
             sidereal_time,
         );
         *visibility = if horizontal.altitude_deg > 0.0
-            || matches!(projected_label.category, LabelCategory::Star)
+            || remains_visible_below_horizon(projected_label.category)
         {
             Visibility::Visible
         } else {
@@ -1101,6 +1105,13 @@ fn update_coordinate_readout(view: &ViewDirection, latitude_deg: f64, sidereal_t
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn star_and_sagittarius_a_labels_remain_visible_below_horizon() {
+        assert!(remains_visible_below_horizon(LabelCategory::Star));
+        assert!(remains_visible_below_horizon(LabelCategory::SagittariusA));
+        assert!(!remains_visible_below_horizon(LabelCategory::Planet));
+    }
 
     #[test]
     fn star_mesh_includes_below_horizon_stars_with_dimmed_colors() {
