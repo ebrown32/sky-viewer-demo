@@ -55,6 +55,7 @@
           <p>The Milky Way band continues below the horizon, dimmed.</p>
           <p>Press F4 to toggle object label categories.</p>
           <p>Press F3 to view render diagnostics.</p>
+          <p>Frames longer than 100 ms are logged in the browser console.</p>
           <p>Sky data: HYG star catalog · JPL orbital elements.</p>
         </div>
         <p id="sensor-status" class="sensor-status">Sky view · live</p>
@@ -120,6 +121,10 @@
       (() => {
         const $ = (id) => document.getElementById(id);
         const debugOverlay = $("debug-overlay");
+        const slowFrameThresholdMs = 100;
+        let previousFrameSample = performance.now();
+        let previousFrameVisible = document.visibilityState !== "hidden";
+        let lastSlowFrameWarning = Number.NEGATIVE_INFINITY;
         const frameTimeOutput = $("debug-frame-time");
         const fpsOutput = $("debug-fps");
         const drawCallsOutput = $("debug-draw-calls");
@@ -153,6 +158,11 @@
         let drawCalls = 0;
         let frameRequest = 0;
         let lastGraphUpdate = 0;
+
+        document.addEventListener("visibilitychange", () => {
+          previousFrameSample = performance.now();
+          previousFrameVisible = document.visibilityState !== "hidden";
+        });
 
         const setDrawCallHooks = (enabled) => {
           if (enabled) {
@@ -508,6 +518,28 @@
           return `${sign}${String(wholeDegrees).padStart(2, "0")}° ${String(minutes).padStart(2, "0")}′`;
         };
         const updateReadout = () => {
+          const frameSample = performance.now();
+          const frameDuration = frameSample - previousFrameSample;
+          const frameVisible = document.visibilityState !== "hidden";
+          previousFrameSample = frameSample;
+          if (
+            frameVisible &&
+            previousFrameVisible &&
+            frameDuration >= slowFrameThresholdMs &&
+            frameSample - lastSlowFrameWarning >= 1000
+          ) {
+            lastSlowFrameWarning = frameSample;
+            console.warn("[Sky Viewer] Long frame", {
+              durationMs: Number(frameDuration.toFixed(1)),
+              latitude: Number(state.latitude.toFixed(3)),
+              longitude: Number(state.longitude.toFixed(3)),
+              objectCount: state.objects.length,
+              projectedLabelCount: state.projectedLabels.length,
+              sensorActive: state.sensorActive,
+              manualActive: state.manualActive,
+            });
+          }
+          previousFrameVisible = frameVisible;
           if (!objectIndexReady && state.objects.length > 0) {
             objectIndexReady = true;
             if (objectSearch.value.trim()) renderSuggestions();

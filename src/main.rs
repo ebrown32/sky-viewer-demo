@@ -242,7 +242,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut observer: ResMut<Observer>,
-    catalog: Res<StarCatalog>,
+    mut pending_build: ResMut<PendingSkyMeshBuild>,
 ) {
     commands.spawn(Camera3dBundle {
         projection: PerspectiveProjection {
@@ -257,12 +257,7 @@ fn setup(
     let julian_day = astro::julian_date(now);
     let sidereal_time =
         astro::local_sidereal_time_deg(julian_day, observer.longitude_deg);
-    let star_mesh = meshes.add(build_star_mesh(
-        &catalog.0,
-        observer.latitude_deg,
-        sidereal_time,
-        julian_day,
-    ));
+    let star_mesh = meshes.add(MeshBuffers::default().into_mesh());
     let star_material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         emissive: LinearRgba::WHITE,
@@ -278,10 +273,7 @@ fn setup(
         })
         .insert(bevy::render::view::visibility::NoFrustumCulling);
 
-    let galaxy_mesh = meshes.add(build_galaxy_mesh(
-        observer.latitude_deg,
-        sidereal_time,
-    ));
+    let galaxy_mesh = meshes.add(MeshBuffers::default().into_mesh());
     let galaxy_material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         unlit: true,
@@ -300,7 +292,12 @@ fn setup(
         stars: star_mesh,
         galaxy: galaxy_mesh,
     });
-    // The initial meshes are already built; avoid rebuilding them on the first update.
+    // Build the initial sky meshes in frame-sized chunks instead of blocking startup.
+    pending_build.0 = Some(SkyMeshBuild::new(
+        observer.latitude_deg,
+        sidereal_time,
+        julian_day,
+    ));
     observer.last_refresh = now;
     observer.force_refresh = false;
 
@@ -846,11 +843,18 @@ fn update_sky(
     }
 
     if let Some(build) = &mut pending_build.0 {
-        if build.build_chunk(&catalog.0) {
+        #[cfg(target_arch = "wasm32")]
+        let chunk_started = js_sys::Date::now();
+        let build_complete = build.build_chunk(&catalog.0);
+        #[cfg(target_arch = "wasm32")]
+        log_slow_mesh_operation("mesh build chunk", js_sys::Date::now() - chunk_started);
+        if build_complete {
             let build = pending_build
                 .0
                 .take()
                 .expect("a completed sky mesh build must be pending");
+            #[cfg(target_arch = "wasm32")]
+            let finalize_started = js_sys::Date::now();
             *meshes
                 .get_mut(&scene.stars)
                 .expect("the star mesh must remain in the asset store") = build.stars.into_mesh();
@@ -858,8 +862,40 @@ fn update_sky(
                 .get_mut(&scene.galaxy)
                 .expect("the Milky Way mesh must remain in the asset store") =
                 build.galaxy.into_mesh();
+            #[cfg(target_arch = "wasm32")]
+            log_slow_mesh_operation(
+                "mesh finalize and upload",
+                js_sys::Date::now() - finalize_started,
+            );
         }
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn log_slow_mesh_operation(stage: &str, duration_ms: f64) {
+    if duration_ms < 100.0 {
+        return;
+    }
+
+    use js_sys::Reflect;
+    use wasm_bindgen::{JsCast, JsValue};
+
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Ok(console) = Reflect::get(window.as_ref(), &JsValue::from_str("console")) else {
+        return;
+    };
+    let Ok(warn) = Reflect::get(&console, &JsValue::from_str("warn")) else {
+        return;
+    };
+    let Some(warn) = warn.dyn_ref::<js_sys::Function>() else {
+        return;
+    };
+    let message = JsValue::from_str(&format!(
+        "[Sky Viewer] Slow {stage}: {duration_ms:.1} ms"
+    ));
+    let _ = warn.call1(&console, &message);
 }
 
 fn body_equatorial(kind: BodyKind, julian_day: f64) -> Equatorial {
@@ -868,25 +904,6 @@ fn body_equatorial(kind: BodyKind, julian_day: f64) -> Equatorial {
         BodyKind::Moon => astro::moon_equatorial(julian_day),
         BodyKind::Planet(planet) => astro::planet_equatorial(planet, julian_day),
     }
-}
-
-fn build_star_mesh(
-    stars: &[Star],
-    latitude_deg: f64,
-    sidereal_time_deg: f64,
-    julian_day: f64,
-) -> Mesh {
-    let mut buffers = MeshBuffers::default();
-    append_star_mesh_range(
-        &mut buffers,
-        stars,
-        0,
-        stars.len(),
-        latitude_deg,
-        sidereal_time_deg,
-        julian_day,
-    );
-    buffers.into_mesh()
 }
 
 fn append_star_mesh_range(
@@ -924,18 +941,6 @@ fn append_star_mesh_range(
             color,
         );
     }
-}
-
-fn build_galaxy_mesh(latitude_deg: f64, sidereal_time_deg: f64) -> Mesh {
-    let mut buffers = MeshBuffers::default();
-    append_galaxy_mesh_range(
-        &mut buffers,
-        0,
-        GALAXY_SEGMENTS,
-        latitude_deg,
-        sidereal_time_deg,
-    );
-    buffers.into_mesh()
 }
 
 fn append_galaxy_mesh_range(
