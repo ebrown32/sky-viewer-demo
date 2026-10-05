@@ -367,12 +367,13 @@
             $("dec-value").textContent = formatDec(state.declination);
           }
           const activeLabels = new Set();
-          for (const [name, x, y] of state.projectedLabels) {
+          for (const [name, x, y, red, green, blue] of state.projectedLabels) {
             let label = projectedLabels.get(name);
             if (!label) {
               label = document.createElement("span");
               label.className = "sky-label";
               label.textContent = name;
+              label.style.color = `rgb(${Math.round(red * 255)} ${Math.round(green * 255)} ${Math.round(blue * 255)})`;
               $("sky-labels").append(label);
               projectedLabels.set(name, label);
             }

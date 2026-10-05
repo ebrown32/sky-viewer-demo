@@ -88,7 +88,11 @@ struct SceneAssets {
 struct CelestialBody(BodyKind);
 
 #[derive(Clone, Copy, Component)]
-struct ProjectedLabel(&'static str);
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+struct ProjectedLabel {
+    name: &'static str,
+    color: Color,
+}
 
 #[derive(Clone, Copy, Component)]
 struct SkyLabel(Equatorial);
@@ -217,7 +221,7 @@ fn setup(
                 ..default()
             },
             CelestialBody(kind),
-            ProjectedLabel(name),
+            ProjectedLabel { name, color },
         ));
     }
 
@@ -225,7 +229,10 @@ fn setup(
         commands.spawn((
             SpatialBundle::default(),
             SkyLabel(position),
-            ProjectedLabel(name),
+            ProjectedLabel {
+                name,
+                color: Color::WHITE,
+            },
         ));
     }
 
@@ -233,7 +240,10 @@ fn setup(
     commands.spawn((
         SpatialBundle::default(),
         SkyLabel(milky_way_label),
-        ProjectedLabel("Milky Way"),
+        ProjectedLabel {
+            name: "Milky Way",
+            color: Color::srgb(0.72, 0.74, 0.82),
+        },
     ));
 }
 
@@ -411,10 +421,14 @@ fn update_projected_labels(
                 else {
                     continue;
                 };
+                let color = label.color.to_srgba();
                 let projected_label = js_sys::Array::new();
-                projected_label.push(&JsValue::from_str(label.0));
+                projected_label.push(&JsValue::from_str(label.name));
                 projected_label.push(&JsValue::from_f64(position.x as f64));
                 projected_label.push(&JsValue::from_f64(position.y as f64));
+                projected_label.push(&JsValue::from_f64(color.red as f64));
+                projected_label.push(&JsValue::from_f64(color.green as f64));
+                projected_label.push(&JsValue::from_f64(color.blue as f64));
                 projected_labels.push(projected_label.as_ref());
             }
         }
@@ -488,7 +502,7 @@ fn update_sky(
 
     for (label, mut transform, mut visibility) in &mut sky_labels {
         let horizontal = astro::equatorial_to_horizontal(
-            label.position,
+            label.0,
             observer.latitude_deg,
             sidereal_time,
         );
