@@ -1,0 +1,64 @@
+{
+  "reference": "HYG v3.8 bright-star coordinates; independent sidereal-time, equatorial-to-horizontal, and perspective-projection calculation.",
+  "catalogLandmarkVerification": {
+    "hygCatalogEntries": 1637,
+    "landmarksChecked": 22,
+    "maxCoordinateSeparationArcsec": 16.461,
+    "maxAllowedSeparationArcsec": 60
+  },
+  "observer": {
+    "latitude": 47.6062,
+    "longitude": -122.3321
+  },
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "thresholds": {
+    "azimuthDeg": 0.01,
+    "altitudeDeg": 0.01,
+    "projectionPixels": 1.5
+  },
+  "regions": [
+    {
+      "region": "Polaris",
+      "screenshot": "screenshots/sky-verification/polaris.png",
+      "referenceLandmarksChecked": 22,
+      "visibleProjectionsChecked": 1,
+      "maxAzimuthErrorDeg": 0.00021809842792208656,
+      "maxAltitudeErrorDeg": 0.00009931212048286397,
+      "maxScreenProjectionErrorPx": 0.000056309280511616904,
+      "capturedAt": "2026-10-05T22:49:32.870Z"
+    },
+    {
+      "region": "Vega",
+      "screenshot": "screenshots/sky-verification/vega.png",
+      "referenceLandmarksChecked": 22,
+      "visibleProjectionsChecked": 2,
+      "maxAzimuthErrorDeg": 0.0003672994721455325,
+      "maxAltitudeErrorDeg": 0.00016977793472960911,
+      "maxScreenProjectionErrorPx": 0.002743298472138228,
+      "capturedAt": "2026-10-05T22:49:36.005Z"
+    },
+    {
+      "region": "Betelgeuse",
+      "screenshot": "screenshots/sky-verification/betelgeuse.png",
+      "referenceLandmarksChecked": 22,
+      "visibleProjectionsChecked": 5,
+      "maxAzimuthErrorDeg": 0.00008532091419510834,
+      "maxAltitudeErrorDeg": 0.000034030155063646816,
+      "maxScreenProjectionErrorPx": 0.0008173743143379617,
+      "capturedAt": "2026-10-05T22:49:39.267Z"
+    },
+    {
+      "region": "Antares",
+      "screenshot": "screenshots/sky-verification/antares.png",
+      "referenceLandmarksChecked": 22,
+      "visibleProjectionsChecked": 1,
+      "maxAzimuthErrorDeg": 0.00043104364658574923,
+      "maxAltitudeErrorDeg": 0.0001858037731192752,
+      "maxScreenProjectionErrorPx": 0.003364325820057337,
+      "capturedAt": "2026-10-05T22:49:42.401Z"
+    }
+  ]
+}
