@@ -15,6 +15,7 @@
   <body>
     <main class="app">
       <canvas id="sky-canvas" aria-label="Interactive three-dimensional sky"></canvas>
+      <span id="sun-label" class="sun-label" hidden>Sun</span>
 
       <header class="topbar">
         <a class="brand" href="/" aria-label="Sky Viewer home">
@@ -234,6 +235,8 @@
           sensorAbsolute: false,
           rightAscension: null,
           declination: null,
+          sunLabelX: null,
+          sunLabelY: null,
         });
         const isMobile =
           matchMedia("(pointer: coarse)").matches ||
@@ -362,6 +365,21 @@
           }
           if (Number.isFinite(state.declination)) {
             $("dec-value").textContent = formatDec(state.declination);
+          }
+          const sunLabel = $("sun-label");
+          const sunLabelX = state.sunLabelX;
+          const sunLabelY = state.sunLabelY;
+          const sunIsInView =
+            Number.isFinite(sunLabelX) &&
+            Number.isFinite(sunLabelY) &&
+            sunLabelX >= 0 &&
+            sunLabelY >= 0 &&
+            sunLabelX <= $("sky-canvas").clientWidth &&
+            sunLabelY <= $("sky-canvas").clientHeight;
+          sunLabel.hidden = !sunIsInView;
+          if (sunIsInView) {
+            sunLabel.style.left = `${sunLabelX}px`;
+            sunLabel.style.top = `${sunLabelY}px`;
           }
           requestAnimationFrame(updateReadout);
         };

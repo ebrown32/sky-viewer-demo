@@ -119,7 +119,14 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(
             Update,
-            (read_browser_controls, pan_with_mouse, update_camera, update_sky).chain(),
+            (
+                read_browser_controls,
+                pan_with_mouse,
+                update_camera,
+                update_sky,
+                update_sun_label,
+            )
+                .chain(),
         )
         .run();
 }
@@ -211,21 +218,23 @@ fn setup(
             },
             CelestialBody(kind),
         ));
-        commands.spawn((
-            Text2dBundle {
-                text: Text::from_section(
-                    name,
-                    TextStyle {
-                        font_size: 20.0,
-                        color: Color::WHITE,
-                        ..default()
-                    },
-                ),
-                transform: Transform::from_scale(Vec3::splat(0.25)),
-                ..default()
-            },
-            BodyLabel(kind),
-        ));
+        if !matches!(kind, BodyKind::Sun) {
+            commands.spawn((
+                Text2dBundle {
+                    text: Text::from_section(
+                        name,
+                        TextStyle {
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                            ..default()
+                        },
+                    ),
+                    transform: Transform::from_scale(Vec3::splat(0.25)),
+                    ..default()
+                },
+                BodyLabel(kind),
+            ));
+        }
     }
 
     for (name, position) in [("Polaris", POLARIS), ("Betelgeuse", BETELGEUSE)] {
@@ -411,6 +420,52 @@ fn update_camera(view: Res<ViewDirection>, mut cameras: Query<&mut Transform, Wi
         * Quat::from_rotation_x(view.altitude_rad);
     for mut transform in &mut cameras {
         transform.rotation = camera_rotation;
+    }
+}
+
+fn update_sun_label(
+    cameras: Query<(&Camera, &Transform), With<Camera3d>>,
+    suns: Query<(&CelestialBody, &Transform, &Visibility), Without<Camera3d>>,
+) {
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = (&cameras, &suns);
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        use js_sys::Reflect;
+        use wasm_bindgen::JsValue;
+
+        let position = cameras.get_single().ok().and_then(|(camera, transform)| {
+            suns.iter()
+                .find(|(body, _, _)| matches!(body.0, BodyKind::Sun))
+                .and_then(|(_, sun_transform, visibility)| {
+                    if *visibility != Visibility::Visible {
+                        return None;
+                    }
+                    camera.world_to_viewport(
+                        &GlobalTransform::from(*transform),
+                        sun_transform.translation,
+                    )
+                })
+        });
+
+        if let Some(window) = web_sys::window() {
+            if let Ok(state) = Reflect::get(window.as_ref(), &JsValue::from_str("skyState")) {
+                let (x, y) = position
+                    .map(|position| (position.x as f64, position.y as f64))
+                    .unwrap_or((f64::NAN, f64::NAN));
+                let _ = Reflect::set(
+                    &state,
+                    &JsValue::from_str("sunLabelX"),
+                    &JsValue::from_f64(x),
+                );
+                let _ = Reflect::set(
+                    &state,
+                    &JsValue::from_str("sunLabelY"),
+                    &JsValue::from_f64(y),
+                );
+            }
+        }
     }
 }
 
