@@ -15,7 +15,7 @@
   <body>
     <main class="app">
       <canvas id="sky-canvas" aria-label="Interactive three-dimensional sky"></canvas>
-      <span id="sun-label" class="sun-label" hidden>Sun</span>
+      <div id="sky-labels" class="sky-labels"></div>
 
       <header class="topbar">
         <a class="brand" href="/" aria-label="Sky Viewer home">
@@ -235,9 +235,9 @@
           sensorAbsolute: false,
           rightAscension: null,
           declination: null,
-          sunLabelX: null,
-          sunLabelY: null,
+          projectedLabels: [],
         });
+        const projectedLabels = new Map();
         const isMobile =
           matchMedia("(pointer: coarse)").matches ||
           "ontouchstart" in window;
@@ -366,20 +366,30 @@
           if (Number.isFinite(state.declination)) {
             $("dec-value").textContent = formatDec(state.declination);
           }
-          const sunLabel = $("sun-label");
-          const sunLabelX = state.sunLabelX;
-          const sunLabelY = state.sunLabelY;
-          const sunIsInView =
-            Number.isFinite(sunLabelX) &&
-            Number.isFinite(sunLabelY) &&
-            sunLabelX >= 0 &&
-            sunLabelY >= 0 &&
-            sunLabelX <= $("sky-canvas").clientWidth &&
-            sunLabelY <= $("sky-canvas").clientHeight;
-          sunLabel.hidden = !sunIsInView;
-          if (sunIsInView) {
-            sunLabel.style.left = `${sunLabelX}px`;
-            sunLabel.style.top = `${sunLabelY}px`;
+          const activeLabels = new Set();
+          for (const [name, x, y] of state.projectedLabels) {
+            let label = projectedLabels.get(name);
+            if (!label) {
+              label = document.createElement("span");
+              label.className = "sky-label";
+              label.textContent = name;
+              $("sky-labels").append(label);
+              projectedLabels.set(name, label);
+            }
+            const inView =
+              x >= 0 &&
+              y >= 0 &&
+              x <= $("sky-canvas").clientWidth &&
+              y <= $("sky-canvas").clientHeight;
+            label.hidden = !inView;
+            if (inView) {
+              label.style.left = `${x}px`;
+              label.style.top = `${y}px`;
+            }
+            activeLabels.add(name);
+          }
+          for (const [name, label] of projectedLabels) {
+            if (!activeLabels.has(name)) label.hidden = true;
           }
           requestAnimationFrame(updateReadout);
         };

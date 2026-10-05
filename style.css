@@ -52,9 +52,15 @@ a {
   touch-action: none;
 }
 
-.sun-label {
+.sky-labels {
   position: absolute;
+  inset: 0;
   z-index: 2;
+  pointer-events: none;
+}
+
+.sky-label {
+  position: absolute;
   padding: 4px 8px;
   border: 1px solid rgb(255 218 151 / 55%);
   border-radius: 5px;
@@ -64,12 +70,11 @@ a {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  pointer-events: none;
   transform: translate(-50%, calc(-100% - 10px));
   white-space: nowrap;
 }
 
-.sun-label[hidden] {
+.sky-label[hidden] {
   display: none;
 }
 

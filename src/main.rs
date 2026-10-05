@@ -88,7 +88,7 @@ struct SceneAssets {
 struct CelestialBody(BodyKind);
 
 #[derive(Clone, Copy, Component)]
-struct BodyLabel(BodyKind);
+struct ProjectedLabel(&'static str);
 
 #[derive(Clone, Copy, Component)]
 struct SkyLabel(Equatorial);
@@ -124,7 +124,7 @@ fn main() {
                 pan_with_mouse,
                 update_camera,
                 update_sky,
-                update_sun_label,
+                update_projected_labels,
             )
                 .chain(),
         )
@@ -217,59 +217,23 @@ fn setup(
                 ..default()
             },
             CelestialBody(kind),
+            ProjectedLabel(name),
         ));
-        if !matches!(kind, BodyKind::Sun) {
-            commands.spawn((
-                Text2dBundle {
-                    text: Text::from_section(
-                        name,
-                        TextStyle {
-                            font_size: 20.0,
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                    ),
-                    transform: Transform::from_scale(Vec3::splat(0.25)),
-                    ..default()
-                },
-                BodyLabel(kind),
-            ));
-        }
     }
 
     for (name, position) in [("Polaris", POLARIS), ("Betelgeuse", BETELGEUSE)] {
         commands.spawn((
-            Text2dBundle {
-                text: Text::from_section(
-                    name,
-                    TextStyle {
-                        font_size: 20.0,
-                        color: Color::WHITE,
-                        ..default()
-                    },
-                ),
-                transform: Transform::from_scale(Vec3::splat(0.25)),
-                ..default()
-            },
+            SpatialBundle::default(),
             SkyLabel(position),
+            ProjectedLabel(name),
         ));
     }
 
     let milky_way_label = astro::galactic_to_equatorial(95.0, 4.0);
     commands.spawn((
-        Text2dBundle {
-            text: Text::from_section(
-                "Milky Way",
-                TextStyle {
-                    font_size: 20.0,
-                    color: Color::srgb(0.72, 0.74, 0.82),
-                    ..default()
-                },
-            ),
-            transform: Transform::from_scale(Vec3::splat(0.25)),
-            ..default()
-        },
+        SpatialBundle::default(),
         SkyLabel(milky_way_label),
+        ProjectedLabel("Milky Way"),
     ));
 }
 
@@ -423,46 +387,44 @@ fn update_camera(view: Res<ViewDirection>, mut cameras: Query<&mut Transform, Wi
     }
 }
 
-fn update_sun_label(
+fn update_projected_labels(
     cameras: Query<(&Camera, &Transform), With<Camera3d>>,
-    suns: Query<(&CelestialBody, &Transform, &Visibility), Without<Camera3d>>,
+    labels: Query<(&ProjectedLabel, &Transform, &Visibility)>,
 ) {
     #[cfg(not(target_arch = "wasm32"))]
-    let _ = (&cameras, &suns);
+    let _ = (&cameras, &labels);
 
     #[cfg(target_arch = "wasm32")]
     {
         use js_sys::Reflect;
         use wasm_bindgen::JsValue;
 
-        let position = cameras.get_single().ok().and_then(|(camera, transform)| {
-            suns.iter()
-                .find(|(body, _, _)| matches!(body.0, BodyKind::Sun))
-                .and_then(|(_, sun_transform, visibility)| {
-                    if *visibility != Visibility::Visible {
-                        return None;
-                    }
-                    camera.world_to_viewport(
-                        &GlobalTransform::from(*transform),
-                        sun_transform.translation,
-                    )
-                })
-        });
+        let projected_labels = js_sys::Array::new();
+        if let Ok((camera, transform)) = cameras.get_single() {
+            let camera_transform = GlobalTransform::from(*transform);
+            for (label, transform, visibility) in &labels {
+                if *visibility != Visibility::Visible {
+                    continue;
+                }
+                let Some(position) =
+                    camera.world_to_viewport(&camera_transform, transform.translation)
+                else {
+                    continue;
+                };
+                let projected_label = js_sys::Array::new();
+                projected_label.push(&JsValue::from_str(label.0));
+                projected_label.push(&JsValue::from_f64(position.x as f64));
+                projected_label.push(&JsValue::from_f64(position.y as f64));
+                projected_labels.push(projected_label.as_ref());
+            }
+        }
 
         if let Some(window) = web_sys::window() {
             if let Ok(state) = Reflect::get(window.as_ref(), &JsValue::from_str("skyState")) {
-                let (x, y) = position
-                    .map(|position| (position.x as f64, position.y as f64))
-                    .unwrap_or((f64::NAN, f64::NAN));
                 let _ = Reflect::set(
                     &state,
-                    &JsValue::from_str("sunLabelX"),
-                    &JsValue::from_f64(x),
-                );
-                let _ = Reflect::set(
-                    &state,
-                    &JsValue::from_str("sunLabelY"),
-                    &JsValue::from_f64(y),
+                    &JsValue::from_str("projectedLabels"),
+                    projected_labels.as_ref(),
                 );
             }
         }
@@ -475,17 +437,10 @@ fn update_sky(
     catalog: Res<StarCatalog>,
     scene: Res<SceneAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut bodies: Query<
-        (&CelestialBody, &mut Transform, &mut Visibility),
-        (Without<BodyLabel>, Without<SkyLabel>),
-    >,
-    mut body_labels: Query<
-        (&BodyLabel, &mut Transform, &mut Visibility),
-        Without<CelestialBody>,
-    >,
+    mut bodies: Query<(&CelestialBody, &mut Transform, &mut Visibility)>,
     mut sky_labels: Query<
         (&SkyLabel, &mut Transform, &mut Visibility),
-        (Without<BodyLabel>, Without<CelestialBody>),
+        Without<CelestialBody>,
     >,
 ) {
     #[cfg(not(target_arch = "wasm32"))]
@@ -531,24 +486,9 @@ fn update_sky(
         transform.translation = horizontal_vector(horizontal) * BODY_RADIUS;
     }
 
-    for (label, mut transform, mut visibility) in &mut body_labels {
-        let position = body_equatorial(label.0, julian_day);
-        let horizontal = astro::equatorial_to_horizontal(
-            position,
-            observer.latitude_deg,
-            sidereal_time,
-        );
-        *visibility = if horizontal.altitude_deg > 0.0 {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-        set_label_transform(&mut transform, horizontal, BODY_RADIUS - 1.7);
-    }
-
     for (label, mut transform, mut visibility) in &mut sky_labels {
         let horizontal = astro::equatorial_to_horizontal(
-            label.0,
+            label.position,
             observer.latitude_deg,
             sidereal_time,
         );
