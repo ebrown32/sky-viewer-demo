@@ -1,10 +1,11 @@
 # Sky Viewer
 
 A single-page 3D view of the night sky built with Rust, WebAssembly, and Bevy.
-At startup, choose whether to use the browser's location or enter coordinates;
-the coordinate fields start with a default location. The sky remains behind a
-loading screen until the location choice is resolved and the first mesh is built,
-so the initial sky uses the final selected coordinates.
+At startup, an existing browser location grant is used automatically; otherwise
+choose whether to use location or enter coordinates. The coordinate fields start
+with a default location. The sky remains behind a loading screen until the
+location choice is resolved and the first mesh is built, so the initial sky uses
+the final selected coordinates.
 On phones and tablets, the optional compass view follows device orientation;
 on desktop, drag the sky with the mouse. Press F2 to view sky viewer information,
 F3 to toggle render diagnostics, and F4 to toggle label categories or search for
