@@ -35,7 +35,6 @@ const BETELGEUSE: Equatorial = Equatorial {
 struct Observer {
     latitude_deg: f64,
     longitude_deg: f64,
-    last_refresh: f64,
     force_refresh: bool,
     #[cfg(target_arch = "wasm32")]
     refresh_reason: Option<SkyMeshRefreshReason>,
@@ -46,7 +45,6 @@ impl Default for Observer {
         Self {
             latitude_deg: 47.6062,
             longitude_deg: -122.3321,
-            last_refresh: 0.0,
             force_refresh: true,
             #[cfg(target_arch = "wasm32")]
             refresh_reason: Some(SkyMeshRefreshReason::Startup),
@@ -62,7 +60,6 @@ enum SkyMeshRefreshReason {
         previous_latitude_deg: f64,
         previous_longitude_deg: f64,
     },
-    Periodic,
     Forced,
 }
 
@@ -938,15 +935,12 @@ fn update_sky(
         js_sys::Date::now() - positions_started,
     );
 
-    let periodic_refresh_due = now - observer.last_refresh >= 30.0;
-    if observer.force_refresh || periodic_refresh_due {
+    if observer.force_refresh {
         #[cfg(target_arch = "wasm32")]
         log_sky_mesh_refresh(
-            observer.refresh_reason.unwrap_or(if periodic_refresh_due {
-                SkyMeshRefreshReason::Periodic
-            } else {
-                SkyMeshRefreshReason::Forced
-            }),
+            observer
+                .refresh_reason
+                .unwrap_or(SkyMeshRefreshReason::Forced),
             observer.latitude_deg,
             observer.longitude_deg,
             catalog.0.len(),
@@ -960,7 +954,6 @@ fn update_sky(
             sidereal_time,
             julian_day,
         ));
-        observer.last_refresh = now;
         observer.force_refresh = false;
     }
 
@@ -1034,7 +1027,6 @@ fn log_sky_mesh_refresh(
              {previous_longitude_deg:.5}),"
         ),
         SkyMeshRefreshReason::Startup => "reason=startup,".to_owned(),
-        SkyMeshRefreshReason::Periodic => "reason=periodic,".to_owned(),
         SkyMeshRefreshReason::Forced => "reason=forced,".to_owned(),
     };
     let message = JsValue::from_str(&format!(
