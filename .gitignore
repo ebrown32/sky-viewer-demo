@@ -1,0 +1,5 @@
+/target
+/dist
+/vendor/
+/.Trunk.toml
+.DS_Store

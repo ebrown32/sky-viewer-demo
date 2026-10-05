@@ -1,0 +1,493 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: #05070d;
+  color: #f3f3f7;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --muted: #85899a;
+  --line: rgb(255 255 255 / 10%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  min-width: 320px;
+  background:
+    radial-gradient(ellipse at 56% 49%, rgb(22 33 60 / 33%), transparent 50%),
+    #05070d;
+}
+
+button,
+a {
+  font: inherit;
+}
+
+.app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  isolation: isolate;
+}
+
+#sky-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.topbar {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: 100%;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 42px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgb(5 7 13 / 86%), rgb(5 7 13 / 42%));
+  backdrop-filter: blur(14px);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f8f8fb;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+}
+
+.brand-mark {
+  color: #e5b76e;
+  font-size: 24px;
+}
+
+.brand-light {
+  color: #9da2b2;
+  font-weight: 500;
+}
+
+.location {
+  display: flex;
+  max-width: 34%;
+  align-items: center;
+  gap: 9px;
+  color: #c5c8d2;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #82ca9a;
+  box-shadow: 0 0 12px rgb(130 202 154 / 60%);
+}
+
+.coordinates {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.coordinates > span:not(.coordinate-divider) {
+  display: grid;
+  gap: 4px;
+}
+
+.coordinates small {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
+.coordinates strong {
+  color: #f5f5f8;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.coordinate-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--line);
+}
+
+.sky-card {
+  position: absolute;
+  top: 50%;
+  left: clamp(28px, 8vw, 124px);
+  width: min(370px, calc(100% - 56px));
+  padding: 30px 28px;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgb(12 15 24 / 86%), rgb(8 10 17 / 65%));
+  box-shadow: 0 24px 75px rgb(0 0 0 / 24%);
+  transform: translateY(-42%);
+  backdrop-filter: blur(20px);
+}
+
+.eyebrow {
+  margin: 0 0 19px;
+  color: #d4ad72;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.17em;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(28px, 3.2vw, 39px);
+  font-weight: 600;
+  letter-spacing: -0.055em;
+  line-height: 1.12;
+}
+
+h1 span {
+  color: #969bab;
+}
+
+.intro {
+  margin: 18px 0 25px;
+  color: #a9adbb;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.guide {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 17px;
+  border-top: 1px solid var(--line);
+}
+
+.guide-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(219 184 129 / 30%);
+  border-radius: 8px;
+  color: #e4c596;
+  font-size: 18px;
+}
+
+.guide p {
+  margin: 0;
+  color: #d0d2da;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.motion-button {
+  width: 100%;
+  margin-top: 15px;
+  padding: 11px 13px;
+  border: 1px solid rgb(229 183 110 / 48%);
+  border-radius: 7px;
+  background: rgb(229 183 110 / 10%);
+  color: #f0d4a8;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  transition: background 150ms ease;
+}
+
+.motion-button:hover {
+  background: rgb(229 183 110 / 18%);
+}
+
+.motion-button[hidden] {
+  display: none;
+}
+
+.privacy-note {
+  margin: 18px 0 0;
+  color: #6f7485;
+  font-size: 10px;
+}
+
+.object-key {
+  position: absolute;
+  right: 42px;
+  bottom: 71px;
+  display: flex;
+  gap: 19px;
+  color: #aeb2bf;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+}
+
+.object-key span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.object-key i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.key-star {
+  background: #fff;
+  box-shadow: 0 0 8px rgb(255 255 255 / 75%);
+}
+
+.key-planet {
+  background: #d9a266;
+  box-shadow: 0 0 8px rgb(217 162 102 / 65%);
+}
+
+.key-galaxy {
+  width: 14px !important;
+  height: 3px !important;
+  border-radius: 4px !important;
+  background: #9495a2;
+}
+
+.footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 42px;
+  border-top: 1px solid var(--line);
+  background: rgb(5 7 13 / 55%);
+  color: #7d8292;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.debug-overlay {
+  position: absolute;
+  z-index: 5;
+  top: 92px;
+  right: 22px;
+  width: min(340px, calc(100% - 32px));
+  padding: 16px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 11px;
+  background: rgb(7 10 17 / 92%);
+  box-shadow: 0 18px 56px rgb(0 0 0 / 40%);
+  color: #e8eaf1;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  pointer-events: none;
+  backdrop-filter: blur(16px);
+}
+
+.debug-overlay[hidden] {
+  display: none;
+}
+
+.debug-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
+.debug-header strong {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.debug-eyebrow {
+  margin: 0 0 5px;
+  color: #d4ad72;
+  font-size: 8px;
+  letter-spacing: 0.13em;
+}
+
+.debug-header kbd {
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 9px;
+}
+
+.debug-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 18px;
+}
+
+.debug-metrics > div {
+  display: grid;
+  gap: 4px;
+}
+
+.debug-metrics span,
+.debug-graph-legend {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.debug-metrics strong {
+  overflow: hidden;
+  color: #f3f3f7;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#debug-frame-graph {
+  display: block;
+  width: 100%;
+  height: 76px;
+  margin-top: 15px;
+}
+
+.debug-graph-legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+}
+
+.debug-graph-legend span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debug-graph-legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #82ca9a;
+}
+
+@media (max-width: 700px) {
+  .debug-overlay {
+    top: 76px;
+    right: 12px;
+    width: min(320px, calc(100% - 24px));
+    padding: 12px;
+  }
+
+  .topbar {
+    min-height: 64px;
+    padding: 0 18px;
+  }
+
+  .brand {
+    font-size: 10px;
+  }
+
+  .brand-mark {
+    font-size: 19px;
+  }
+
+  .location {
+    display: none;
+  }
+
+  .coordinates {
+    gap: 9px;
+  }
+
+  .coordinates strong {
+    font-size: 10px;
+  }
+
+  .coordinate-divider {
+    height: 20px;
+  }
+
+  .sky-card {
+    top: auto;
+    bottom: 84px;
+    left: 16px;
+    width: min(340px, calc(100% - 32px));
+    padding: 19px;
+    transform: none;
+  }
+
+  .eyebrow {
+    margin-bottom: 12px;
+    font-size: 8px;
+  }
+
+  h1 {
+    font-size: 27px;
+  }
+
+  .intro {
+    margin: 12px 0 16px;
+    font-size: 12px;
+  }
+
+  .guide {
+    padding-top: 12px;
+  }
+
+  .privacy-note {
+    margin-top: 12px;
+  }
+
+  .object-key {
+    right: 16px;
+    bottom: 63px;
+    gap: 10px;
+    font-size: 8px;
+  }
+
+  .footer {
+    min-height: 38px;
+    padding: 0 16px;
+    font-size: 8px;
+  }
+}
+
+@media (max-height: 600px) and (min-width: 701px) {
+  .sky-card {
+    top: 51%;
+    padding: 21px;
+  }
+
+  .intro {
+    margin: 12px 0 16px;
+  }
+}

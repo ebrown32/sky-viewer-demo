@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Explore the stars, planets, and Milky Way from your location."
+    />
+    <meta name="theme-color" content="#05070d" />
+    <title>Sky Viewer</title>
+    <link data-trunk rel="css" href="style.css" />
+    <link data-trunk rel="rust" />
+  </head>
+  <body>
+    <main class="app">
+      <canvas id="sky-canvas" aria-label="Interactive three-dimensional sky"></canvas>
+
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Sky Viewer home">
+          <span class="brand-mark" aria-hidden="true">✦</span>
+          <span>SKY<span class="brand-light">VIEWER</span></span>
+        </a>
+        <div class="location">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="location-status">Using Seattle fallback</span>
+        </div>
+        <div class="coordinates" aria-live="polite" aria-label="View coordinates">
+          <span><small>RA</small><strong id="ra-value">--h --m</strong></span>
+          <span class="coordinate-divider" aria-hidden="true"></span>
+          <span><small>DEC</small><strong id="dec-value">--° --′</strong></span>
+        </div>
+      </header>
+
+      <aside class="sky-card" aria-label="Viewing guidance">
+        <p class="eyebrow">YOUR WINDOW TO THE COSMOS</p>
+        <h1>Look up.<br /><span>The universe is there.</span></h1>
+        <p class="intro">
+          A live map of the sky above you, with stars, planets, and the Milky Way
+          placed where they really are.
+        </p>
+        <div class="guide">
+          <span class="guide-icon" aria-hidden="true">⌖</span>
+          <p id="compass-status">Drag to explore the sky</p>
+        </div>
+        <button id="motion-button" class="motion-button" type="button" hidden>
+          Enable compass
+        </button>
+        <p class="privacy-note">Your location stays in this browser.</p>
+      </aside>
+
+      <div class="object-key" aria-label="Objects in the sky">
+        <span><i class="key-star"></i>Stars</span>
+        <span><i class="key-planet"></i>Planets</span>
+        <span><i class="key-galaxy"></i>Milky Way</span>
+      </div>
+
+      <aside id="debug-overlay" class="debug-overlay" aria-label="Performance diagnostics" hidden>
+        <div class="debug-header">
+          <div>
+            <p class="debug-eyebrow">RENDER DIAGNOSTICS</p>
+            <strong>Frame performance</strong>
+          </div>
+          <kbd>F3</kbd>
+        </div>
+        <div class="debug-metrics">
+          <div><span>Frame time</span><strong id="debug-frame-time">-- ms</strong></div>
+          <div><span>FPS</span><strong id="debug-fps">--</strong></div>
+          <div><span>Draw calls</span><strong id="debug-draw-calls">--</strong></div>
+          <div><span>Renderer</span><strong id="debug-renderer">WebGL2</strong></div>
+        </div>
+        <canvas
+          id="debug-frame-graph"
+          width="320"
+          height="76"
+          aria-label="Frame time in milliseconds for the most recent 120 frames"
+        ></canvas>
+        <div class="debug-graph-legend"><span><i></i>16.7 ms target</span><span>120 frames</span></div>
+      </aside>
+
+      <footer class="footer">
+        <span>HYG star catalog · JPL orbital elements</span>
+        <span id="sensor-status">SKY VIEW · LIVE</span>
+      </footer>
+    </main>
+
+    <script>
+      (() => {
+        const $ = (id) => document.getElementById(id);
+        const debugOverlay = $("debug-overlay");
+        const frameTimeOutput = $("debug-frame-time");
+        const fpsOutput = $("debug-fps");
+        const drawCallsOutput = $("debug-draw-calls");
+        const rendererOutput = $("debug-renderer");
+        const frameGraph = $("debug-frame-graph");
+        const frameGraphContext = frameGraph.getContext("2d");
+        const frameTimes = [];
+        const drawMethodNames = [
+          "drawArrays",
+          "drawElements",
+          "drawArraysInstanced",
+          "drawElementsInstanced",
+        ];
+        const drawPrototypes = new Set();
+        for (const Context of [
+          window.WebGL2RenderingContext,
+          window.WebGLRenderingContext,
+        ]) {
+          if (!Context) continue;
+          for (
+            let prototype = Context.prototype;
+            prototype && prototype !== Object.prototype;
+            prototype = Object.getPrototypeOf(prototype)
+          ) {
+            drawPrototypes.add(prototype);
+          }
+        }
+        const originalDrawMethods = [];
+        let debugOpen = false;
+        let previousFrameTime = null;
+        let drawCalls = 0;
+        let frameRequest = 0;
+        let lastGraphUpdate = 0;
+
+        const setDrawCallHooks = (enabled) => {
+          if (enabled) {
+            for (const prototype of drawPrototypes) {
+              for (const name of drawMethodNames) {
+                const descriptor = Object.getOwnPropertyDescriptor(prototype, name);
+                if (!descriptor || typeof descriptor.value !== "function") continue;
+                const original = descriptor.value;
+                Object.defineProperty(prototype, name, {
+                  ...descriptor,
+                  value: function (...args) {
+                    drawCalls += 1;
+                    return original.apply(this, args);
+                  },
+                });
+                originalDrawMethods.push({ prototype, name, descriptor });
+              }
+            }
+            return;
+          }
+
+          for (const { prototype, name, descriptor } of originalDrawMethods.reverse()) {
+            Object.defineProperty(prototype, name, descriptor);
+          }
+          originalDrawMethods.length = 0;
+        };
+
+        const drawFrameGraph = () => {
+          const { width, height } = frameGraph;
+          frameGraphContext.clearRect(0, 0, width, height);
+
+          for (const target of [16.7, 33.3]) {
+            const y = height - (target / 50) * height;
+            frameGraphContext.beginPath();
+            frameGraphContext.strokeStyle = "rgba(255, 255, 255, 0.14)";
+            frameGraphContext.moveTo(0, y);
+            frameGraphContext.lineTo(width, y);
+            frameGraphContext.stroke();
+          }
+
+          const barWidth = width / 120;
+          const leadingBars = 120 - frameTimes.length;
+          frameTimes.forEach((frameTime, index) => {
+            const barHeight = Math.max(1, (Math.min(frameTime, 50) / 50) * height);
+            frameGraphContext.fillStyle =
+              frameTime < 16.7 ? "#82ca9a" : frameTime < 33.3 ? "#e5b76e" : "#fa7878";
+            frameGraphContext.fillRect(
+              (leadingBars + index) * barWidth,
+              height - barHeight,
+              Math.max(1, barWidth - 1),
+              barHeight,
+            );
+          });
+        };
+
+        const updateDebugInfo = (timestamp) => {
+          if (!debugOpen) return;
+          if (previousFrameTime !== null) {
+            const frameTime = timestamp - previousFrameTime;
+            frameTimes.push(frameTime);
+            if (frameTimes.length > 120) frameTimes.shift();
+            frameTimeOutput.textContent = `${frameTime.toFixed(1)} ms`;
+            const recentFrames = frameTimes.slice(-60);
+            const averageFrameTime =
+              recentFrames.reduce((total, value) => total + value, 0) / recentFrames.length;
+            fpsOutput.textContent = `${(1000 / averageFrameTime).toFixed(0)}`;
+            drawCallsOutput.textContent = `${drawCalls}`;
+            drawCalls = 0;
+            rendererOutput.textContent = `WebGL2 · ${$("sky-canvas").width} × ${$("sky-canvas").height}`;
+            if (timestamp - lastGraphUpdate >= 100) {
+              drawFrameGraph();
+              lastGraphUpdate = timestamp;
+            }
+          }
+          previousFrameTime = timestamp;
+          frameRequest = requestAnimationFrame(updateDebugInfo);
+        };
+
+        const setDebugOpen = (open) => {
+          if (open === debugOpen) return;
+          debugOpen = open;
+          debugOverlay.hidden = !open;
+          if (open) {
+            frameTimes.length = 0;
+            previousFrameTime = null;
+            drawCalls = 0;
+            frameTimeOutput.textContent = "-- ms";
+            fpsOutput.textContent = "--";
+            drawCallsOutput.textContent = "--";
+            setDrawCallHooks(true);
+            frameRequest = requestAnimationFrame(updateDebugInfo);
+          } else {
+            cancelAnimationFrame(frameRequest);
+            setDrawCallHooks(false);
+          }
+        };
+
+        window.addEventListener("keydown", (event) => {
+          if (event.code !== "F3") return;
+          event.preventDefault();
+          if (!event.repeat) setDebugOpen(!debugOpen);
+        });
+
+        const seattle = { latitude: 47.6062, longitude: -122.3321 };
+        const state = (window.skyState = {
+          ...seattle,
+          heading: 0,
+          altitude: 25,
+          sensorActive: false,
+          manualActive: false,
+          sensorAbsolute: false,
+          rightAscension: null,
+          declination: null,
+        });
+        const isMobile =
+          matchMedia("(pointer: coarse)").matches ||
+          "ontouchstart" in window;
+        const motionButton = $("motion-button");
+
+        if (isMobile) {
+          motionButton.hidden = false;
+          $("compass-status").textContent =
+            "Enable your compass to point the sky at the stars";
+          const canvas = $("sky-canvas");
+          let lastTouch = null;
+          canvas.addEventListener("pointerdown", (event) => {
+            lastTouch = { x: event.clientX, y: event.clientY };
+            canvas.setPointerCapture(event.pointerId);
+          });
+          canvas.addEventListener("pointermove", (event) => {
+            if (!lastTouch || state.sensorActive) return;
+            const deltaX = event.clientX - lastTouch.x;
+            const deltaY = event.clientY - lastTouch.y;
+            state.heading = (state.heading - deltaX * 0.3 + 360) % 360;
+            state.altitude = Math.max(
+              -85,
+              Math.min(85, state.altitude + deltaY * 0.3),
+            );
+            state.manualActive = true;
+            lastTouch = { x: event.clientX, y: event.clientY };
+          });
+          const endTouch = () => {
+            lastTouch = null;
+            state.manualActive = false;
+          };
+          canvas.addEventListener("pointerup", endTouch);
+          canvas.addEventListener("pointercancel", endTouch);
+        }
+
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            ({ coords }) => {
+              state.latitude = coords.latitude;
+              state.longitude = coords.longitude;
+              $("location-status").textContent =
+                `${coords.latitude.toFixed(2)}°, ${coords.longitude.toFixed(2)}°`;
+            },
+            () => {
+              state.latitude = seattle.latitude;
+              state.longitude = seattle.longitude;
+              $("location-status").textContent = "Seattle fallback · location unavailable";
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+          );
+        } else {
+          $("location-status").textContent = "Seattle fallback · location unavailable";
+        }
+
+        let orientationListening = false;
+        const onOrientation = (event) => {
+          if (event.alpha === null || event.beta === null) {
+            $("sensor-status").textContent = "COMPASS DATA UNAVAILABLE";
+            return;
+          }
+          const screenAngle = window.screen.orientation?.angle || 0;
+          state.heading = ((360 - event.alpha + screenAngle) % 360 + 360) % 360;
+          state.altitude = Math.max(-85, Math.min(85, 90 - event.beta));
+          state.sensorActive = true;
+          state.manualActive = false;
+          state.sensorAbsolute = Boolean(event.absolute);
+          $("compass-status").textContent = event.absolute
+            ? "Compass active · heading referenced to true north"
+            : "Compass active · calibrate your device for true north";
+          $("sensor-status").textContent = event.absolute
+            ? "COMPASS · TRUE NORTH"
+            : "COMPASS · RELATIVE HEADING";
+        };
+
+        motionButton.addEventListener("click", async () => {
+          try {
+            const orientation = window.DeviceOrientationEvent;
+            if (
+              orientation &&
+              typeof orientation.requestPermission === "function"
+            ) {
+              const permission = await orientation.requestPermission();
+              if (permission !== "granted") {
+                $("compass-status").textContent =
+                  "Compass permission was not granted; drag or touch to explore instead";
+                return;
+              }
+            }
+            if (!orientationListening && orientation) {
+              window.addEventListener("deviceorientation", onOrientation, {
+                passive: true,
+              });
+              orientationListening = true;
+            } else if (!orientation) {
+              $("compass-status").textContent =
+                "This browser does not provide compass readings";
+              $("sensor-status").textContent = "COMPASS UNAVAILABLE";
+              return;
+            }
+            $("compass-status").textContent =
+              "Waiting for compass readings…";
+          } catch {
+            $("compass-status").textContent =
+              "Compass unavailable; drag or touch to explore instead";
+            $("sensor-status").textContent = "COMPASS UNAVAILABLE";
+          }
+        });
+
+        const formatRa = (degrees) => {
+          const hours = ((degrees / 15) % 24 + 24) % 24;
+          const wholeHours = Math.floor(hours);
+          const minutes = Math.floor((hours - wholeHours) * 60);
+          return `${String(wholeHours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m`;
+        };
+        const formatDec = (degrees) => {
+          const sign = degrees < 0 ? "−" : "+";
+          const absolute = Math.abs(degrees);
+          const wholeDegrees = Math.floor(absolute);
+          const minutes = Math.floor((absolute - wholeDegrees) * 60);
+          return `${sign}${String(wholeDegrees).padStart(2, "0")}° ${String(minutes).padStart(2, "0")}′`;
+        };
+        const updateReadout = () => {
+          if (Number.isFinite(state.rightAscension)) {
+            $("ra-value").textContent = formatRa(state.rightAscension);
+          }
+          if (Number.isFinite(state.declination)) {
+            $("dec-value").textContent = formatDec(state.declination);
+          }
+          requestAnimationFrame(updateReadout);
+        };
+        updateReadout();
+      })();
+    </script>
+  </body>
+</html>
