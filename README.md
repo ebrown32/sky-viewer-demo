@@ -47,11 +47,10 @@ cooldown (`.cargo/config.toml`). Use a Cargo release that supports
 
 The GitHub Actions workflow builds the WebAssembly app and deploys it to GitHub
 Pages on pushes to `main` (or when run manually), caching Rust build artifacts
-and Trunk to speed up later runs. In the repository settings, set **Pages →
-Build and deployment → Source** to **GitHub Actions**. The published URL is
-`https://ebrown32.github.io/sky-viewer-demo/`. Publishing a private repository
-with GitHub Pages requires an account plan that supports Pages for private
-repositories.
+and Trunk to speed up later runs. The workflow requests Pages enablement
+automatically. The published URL is `https://ebrown32.github.io/sky-viewer-demo/`.
+Publishing a private repository with GitHub Pages requires an account plan
+that supports Pages for private repositories.
 
 ## Sky data and calculations
 
