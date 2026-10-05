@@ -773,7 +773,7 @@ fn update_sky(
     mut meshes: ResMut<Assets<Mesh>>,
     mut bodies: Query<(&CelestialBody, &mut Transform, &mut Visibility)>,
     mut sky_labels: Query<
-        (&SkyLabel, &mut Transform, &mut Visibility),
+        (&SkyLabel, &ProjectedLabel, &mut Transform, &mut Visibility),
         Without<CelestialBody>,
     >,
 ) {
@@ -803,13 +803,15 @@ fn update_sky(
         transform.translation = horizontal_vector(horizontal) * BODY_RADIUS;
     }
 
-    for (label, mut transform, mut visibility) in &mut sky_labels {
+    for (label, projected_label, mut transform, mut visibility) in &mut sky_labels {
         let horizontal = astro::equatorial_to_horizontal(
             label.0,
             observer.latitude_deg,
             sidereal_time,
         );
-        *visibility = if horizontal.altitude_deg > 0.0 {
+        *visibility = if horizontal.altitude_deg > 0.0
+            || matches!(projected_label.category, LabelCategory::Star)
+        {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -891,17 +893,19 @@ fn append_star_mesh_range(
         );
         let horizontal =
             astro::equatorial_to_horizontal(position, latitude_deg, sidereal_time_deg);
-        if horizontal.altitude_deg <= 0.0 {
-            continue;
-        }
         let direction = horizontal_vector(horizontal);
         let radius = 0.055 * 10.0_f32.powf(((5.0 - star.magnitude) as f32) * 0.16);
+        let color = if horizontal.altitude_deg < 0.0 {
+            [0.48, 0.54, 0.68, 0.35]
+        } else {
+            [1.0, 1.0, 1.0, 1.0]
+        };
         append_quad(
             buffers,
             direction * SKY_RADIUS,
             direction,
             radius,
-            [1.0, 1.0, 1.0, 1.0],
+            color,
         );
     }
 }
@@ -1073,6 +1077,33 @@ fn update_coordinate_readout(view: &ViewDirection, latitude_deg: f64, sidereal_t
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn star_mesh_includes_below_horizon_stars_with_dimmed_colors() {
+        let stars = [
+            Star {
+                ra_hours: 0.0,
+                dec_deg: 0.0,
+                magnitude: 1.0,
+                pm_ra: 0.0,
+                pm_dec: 0.0,
+            },
+            Star {
+                ra_hours: 12.0,
+                dec_deg: 0.0,
+                magnitude: 1.0,
+                pm_ra: 0.0,
+                pm_dec: 0.0,
+            },
+        ];
+        let mut buffers = MeshBuffers::default();
+
+        append_star_mesh_range(&mut buffers, &stars, 0, stars.len(), 0.0, 0.0, 2_451_545.0);
+
+        assert_eq!(buffers.indices.len(), 12);
+        assert_eq!(buffers.colors[0][3], 1.0);
+        assert!(buffers.colors[4][3] < buffers.colors[0][3]);
+    }
 
     #[test]
     fn batched_sky_mesh_build_matches_full_mesh_data() {
