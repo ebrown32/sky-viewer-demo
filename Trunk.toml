@@ -4,4 +4,13 @@ dist = "dist"
 public_url = "/"
 
 [watch]
-watch = ["assets", "src", "index.html", "style.css"]
+watch = [
+    "assets",
+    "src",
+    "index.html",
+    "style.css",
+    "Cargo.toml",
+    "Cargo.lock",
+    "Trunk.toml",
+    ".cargo",
+]
