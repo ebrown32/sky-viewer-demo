@@ -158,6 +158,9 @@ impl MeshBuffers {
 #[derive(Clone, Copy, Component)]
 struct CelestialBody(BodyKind);
 
+#[derive(Component)]
+struct SunDirectionLight;
+
 #[derive(Clone, Copy, Component)]
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 struct ProjectedLabel {
@@ -257,6 +260,23 @@ fn setup(
     let julian_day = astro::julian_date(now);
     let sidereal_time =
         astro::local_sidereal_time_deg(julian_day, observer.longitude_deg);
+    let sun_horizontal = astro::equatorial_to_horizontal(
+        astro::sun_equatorial(julian_day),
+        observer.latitude_deg,
+        sidereal_time,
+    );
+    commands.spawn((
+        DirectionalLightBundle {
+            directional_light: DirectionalLight {
+                illuminance: 100_000.0,
+                shadows_enabled: false,
+                ..default()
+            },
+            transform: sun_light_transform(horizontal_vector(sun_horizontal)),
+            ..default()
+        },
+        SunDirectionLight,
+    ));
     let star_mesh = meshes.add(MeshBuffers::default().into_mesh());
     let star_material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
@@ -309,10 +329,15 @@ fn setup(
     );
     for kind in all_bodies() {
         let (name, color, scale) = body_appearance(kind);
+        let moon = matches!(kind, BodyKind::Moon);
         let material = materials.add(StandardMaterial {
             base_color: color,
-            emissive: color.into(),
-            unlit: true,
+            emissive: if moon {
+                LinearRgba::BLACK
+            } else {
+                color.into()
+            },
+            unlit: !moon,
             ..default()
         });
         commands.spawn((
@@ -785,6 +810,7 @@ fn update_sky(
     scene: Res<SceneAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut bodies: Query<(&CelestialBody, &mut Transform, &mut Visibility)>,
+    mut sun_lights: Query<&mut Transform, With<SunDirectionLight>>,
     mut sky_labels: Query<
         (&SkyLabel, &ProjectedLabel, &mut Transform, &mut Visibility),
         Without<CelestialBody>,
@@ -797,6 +823,15 @@ fn update_sky(
     let julian_day = astro::julian_date(now);
     let sidereal_time =
         astro::local_sidereal_time_deg(julian_day, observer.longitude_deg);
+    let sun_horizontal = astro::equatorial_to_horizontal(
+        astro::sun_equatorial(julian_day),
+        observer.latitude_deg,
+        sidereal_time,
+    );
+    let sun_direction = horizontal_vector(sun_horizontal);
+    for mut light_transform in &mut sun_lights {
+        *light_transform = sun_light_transform(sun_direction);
+    }
 
     #[cfg(target_arch = "wasm32")]
     update_coordinate_readout(&view, observer.latitude_deg, sidereal_time);
@@ -1051,6 +1086,16 @@ fn horizontal_vector(horizontal: Horizontal) -> Vec3 {
     )
 }
 
+fn sun_light_transform(sun_direction: Vec3) -> Transform {
+    let light_position = sun_direction * 100.0;
+    let up = if sun_direction.y.abs() > 0.99 {
+        Vec3::X
+    } else {
+        Vec3::Y
+    };
+    Transform::from_translation(light_position).looking_at(Vec3::ZERO, up)
+}
+
 fn set_label_transform(transform: &mut Transform, horizontal: Horizontal, radius: f32) {
     let direction = horizontal_vector(horizontal);
     transform.translation = direction * radius;
@@ -1112,6 +1157,19 @@ fn update_coordinate_readout(view: &ViewDirection, latitude_deg: f64, sidereal_t
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sunlight_points_from_the_sun_toward_the_sky_scene() {
+        for sun_direction in [
+            Vec3::new(0.3, -0.4, 0.5).normalize(),
+            Vec3::Y,
+            Vec3::NEG_Y,
+        ] {
+            let transform = sun_light_transform(sun_direction);
+            let ray_direction = transform.rotation * Vec3::NEG_Z;
+            assert!((ray_direction + sun_direction).length() < 1.0e-5);
+        }
+    }
 
     #[test]
     fn star_and_sagittarius_a_labels_remain_visible_below_horizon() {

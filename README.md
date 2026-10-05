@@ -43,8 +43,9 @@ details. Proper motion is applied from the J2000 catalog epoch.
 Planet positions use the JPL approximate heliocentric orbital elements for
 1800–2050, solved with Kepler's equation
 (<https://ssd.jpl.nasa.gov/planets/approx_pos.html>). The Moon uses a low-precision
-geocentric orbital model with the principal periodic corrections. These are
-intended for a visual sky guide, not navigation or astrometry.
+geocentric orbital model with the principal periodic corrections, and its
+displayed phase follows the Sun's direction for the current date and time.
+These are intended for a visual sky guide, not navigation or astrometry.
 
 The star coordinates are transformed from equatorial to local horizontal
 coordinates using the observer's latitude, longitude, and local sidereal time.
