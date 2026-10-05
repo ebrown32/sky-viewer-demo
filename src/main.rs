@@ -816,7 +816,14 @@ fn update_sky(
     scene: Res<SceneAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut bodies: Query<(&CelestialBody, &mut Transform, &mut Visibility)>,
-    mut sun_lights: Query<&mut Transform, With<SunDirectionLight>>,
+    mut sun_lights: Query<
+        &mut Transform,
+        (
+            With<SunDirectionLight>,
+            Without<CelestialBody>,
+            Without<SkyLabel>,
+        ),
+    >,
     mut sky_labels: Query<
         (&SkyLabel, &ProjectedLabel, &mut Transform, &mut Visibility),
         Without<CelestialBody>,
@@ -1175,6 +1182,12 @@ mod tests {
             let ray_direction = transform.rotation * Vec3::NEG_Z;
             assert!((ray_direction + sun_direction).length() < 1.0e-5);
         }
+    }
+
+    #[test]
+    fn update_sky_system_initializes_without_query_conflicts() {
+        let mut system = bevy::ecs::system::IntoSystem::into_system(update_sky);
+        system.initialize(&mut World::new());
     }
 
     #[test]
