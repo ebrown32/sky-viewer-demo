@@ -21,9 +21,10 @@
         <div class="coordinates" aria-live="polite" aria-label="View coordinates">
           <span><small>LAT</small><strong id="latitude-value">--° --′</strong></span>
           <span><small>LON</small><strong id="longitude-value">--° --′</strong></span>
-          <span><small>RA</small><strong id="ra-value">--h --m</strong></span>
           <span class="coordinate-divider" aria-hidden="true"></span>
+          <span><small>RA</small><strong id="ra-value">--h --m</strong></span>
           <span><small>DEC</small><strong id="dec-value">--° --′</strong></span>
+          <span><small>BEARING</small><strong id="bearing-value">000°</strong></span>
         </div>
       </header>
 
@@ -518,6 +519,10 @@
           const minutes = Math.floor((absolute - wholeDegrees) * 60);
           return `${sign}${String(wholeDegrees).padStart(2, "0")}° ${String(minutes).padStart(2, "0")}′`;
         };
+        const formatBearing = (degrees) => {
+          const bearing = Math.round(((degrees % 360) + 360) % 360) % 360;
+          return `${String(bearing).padStart(3, "0")}°`;
+        };
         const updateReadout = () => {
           const frameSample = performance.now();
           const frameDuration = frameSample - previousFrameSample;
@@ -570,6 +575,7 @@
           }
           $("latitude-value").textContent = `${state.latitude.toFixed(2)}°`;
           $("longitude-value").textContent = `${state.longitude.toFixed(2)}°`;
+          $("bearing-value").textContent = formatBearing(state.heading);
           const activeLabels = new Set();
           for (const [
             name,
