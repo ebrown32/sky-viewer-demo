@@ -43,6 +43,15 @@ Cargo is configured to select registry crate versions only after a 30-day
 cooldown (`.cargo/config.toml`). Use a Cargo release that supports
 `registry.global-min-publish-age` when resolving or updating dependencies.
 
+## GitHub Pages deployment
+
+The GitHub Actions workflow builds the WebAssembly app and deploys it to GitHub
+Pages on pushes to `main` (or when run manually). In the repository settings,
+set **Pages → Build and deployment → Source** to **GitHub Actions**. The
+published URL is `https://ebrown32.github.io/sky-viewer-demo/`. Publishing a
+private repository with GitHub Pages requires an account plan that supports
+Pages for private repositories.
+
 ## Sky data and calculations
 
 `assets/stars.tsv` contains every HYG v3.8 catalog entry with apparent
