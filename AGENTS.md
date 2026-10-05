@@ -1,2 +1,3 @@
 - Always set a min-age on crates so that we do not download any crate versions newer than 1 month ago
-- After every prompt, commit all changes to git
+- After every prompt, commit all changes to git including files the user has updated that you did not change
+- If possible, validate any change you make using headless chrome
