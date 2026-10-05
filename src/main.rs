@@ -957,9 +957,6 @@ fn append_galaxy_mesh_range(
         let horizontal = points.map(|point| {
             astro::equatorial_to_horizontal(point, latitude_deg, sidereal_time_deg)
         });
-        if horizontal.iter().any(|point| point.altitude_deg <= 0.0) {
-            continue;
-        }
 
         let first_index = buffers.positions.len() as u32;
         for (corner, point) in horizontal.into_iter().enumerate() {
@@ -968,7 +965,12 @@ fn append_galaxy_mesh_range(
                 .positions
                 .push((direction * GALAXY_RADIUS).to_array());
             buffers.normals.push(direction.to_array());
-            let alpha = if corner == 0 || corner == 3 { 0.08 } else { 0.19 };
+            let base_alpha = if corner == 0 || corner == 3 { 0.08 } else { 0.19 };
+            let alpha = if point.altitude_deg < 0.0 {
+                base_alpha * 0.35
+            } else {
+                base_alpha
+            };
             buffers.colors.push([0.48, 0.50, 0.58, alpha]);
         }
         buffers.indices.extend_from_slice(&[
@@ -1138,6 +1140,17 @@ mod tests {
         assert_eq!(buffers.indices.len(), 12);
         assert_eq!(buffers.colors[0][3], 1.0);
         assert!(buffers.colors[4][3] < buffers.colors[0][3]);
+    }
+
+    #[test]
+    fn milky_way_mesh_spans_the_full_sphere_and_dims_below_horizon() {
+        let mut buffers = MeshBuffers::default();
+
+        append_galaxy_mesh_range(&mut buffers, 0, GALAXY_SEGMENTS, 0.0, 0.0);
+
+        assert_eq!(buffers.indices.len(), GALAXY_SEGMENTS * 6);
+        assert!(buffers.colors.iter().any(|color| color[3] < 0.08));
+        assert!(buffers.colors.iter().any(|color| color[3] >= 0.08));
     }
 
     #[test]
