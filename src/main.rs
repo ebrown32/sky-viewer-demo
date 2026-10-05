@@ -49,7 +49,7 @@ impl Default for Observer {
             last_refresh: 0.0,
             force_refresh: true,
             #[cfg(target_arch = "wasm32")]
-            refresh_reason: None,
+            refresh_reason: Some(SkyMeshRefreshReason::Startup),
         }
     }
 }
@@ -257,7 +257,8 @@ fn main() {
                 update_sky,
                 update_projected_labels,
             )
-                .chain(),
+                .chain()
+                .run_if(browser_startup_ready),
         )
         .run();
 }
@@ -266,12 +267,13 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut observer: ResMut<Observer>,
-    mut pending_build: ResMut<PendingSkyMeshBuild>,
-    #[cfg(target_arch = "wasm32")]
-    catalog: Res<StarCatalog>,
+    observer: Res<Observer>,
 ) {
     commands.spawn(Camera3dBundle {
+        camera: Camera {
+            is_active: false,
+            ..default()
+        },
         projection: PerspectiveProjection {
             fov: SKY_VERTICAL_FOV_DEGREES.to_radians(),
             ..default()
@@ -336,25 +338,6 @@ fn setup(
         stars: star_mesh,
         galaxy: galaxy_mesh,
     });
-    // Build the initial sky meshes in frame-sized chunks instead of blocking startup.
-    pending_build.0 = Some(SkyMeshBuild::new(
-        observer.latitude_deg,
-        sidereal_time,
-        julian_day,
-    ));
-    #[cfg(target_arch = "wasm32")]
-    log_sky_mesh_refresh(
-        SkyMeshRefreshReason::Startup,
-        observer.latitude_deg,
-        observer.longitude_deg,
-        catalog.0.len(),
-    );
-    observer.last_refresh = now;
-    observer.force_refresh = false;
-    #[cfg(target_arch = "wasm32")]
-    {
-        observer.refresh_reason = None;
-    }
 
     let sphere_mesh = meshes.add(
         Sphere::new(0.5)
@@ -754,6 +737,25 @@ fn bool_property(value: &wasm_bindgen::JsValue, key: &str) -> Option<bool> {
         .as_bool()
 }
 
+fn browser_startup_ready() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use js_sys::Reflect;
+        use wasm_bindgen::JsValue;
+
+        let Some(window) = web_sys::window() else {
+            return false;
+        };
+        let Ok(state) = Reflect::get(window.as_ref(), &JsValue::from_str("skyState")) else {
+            return false;
+        };
+        return bool_property(&state, "startupReady").unwrap_or(false);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    true
+}
+
 fn pan_with_mouse(
     mut motion: EventReader<bevy::input::mouse::MouseMotion>,
     buttons: Res<ButtonInput<MouseButton>>,
@@ -771,10 +773,14 @@ fn pan_with_mouse(
     }
 }
 
-fn update_camera(view: Res<ViewDirection>, mut cameras: Query<&mut Transform, With<Camera3d>>) {
+fn update_camera(
+    view: Res<ViewDirection>,
+    mut cameras: Query<(&mut Camera, &mut Transform), With<Camera3d>>,
+) {
     let camera_rotation = Quat::from_rotation_y(std::f32::consts::PI + view.azimuth_rad)
         * Quat::from_rotation_x(view.altitude_rad);
-    for mut transform in &mut cameras {
+    for (mut camera, mut transform) in &mut cameras {
+        camera.is_active = true;
         transform.rotation = camera_rotation;
     }
 }
@@ -983,10 +989,30 @@ fn update_sky(
                 "mesh finalize and upload",
                 js_sys::Date::now() - finalize_started,
             );
+            #[cfg(target_arch = "wasm32")]
+            mark_browser_sky_ready();
         }
     }
     #[cfg(target_arch = "wasm32")]
     log_slow_operation("sky update system", js_sys::Date::now() - update_started);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn mark_browser_sky_ready() {
+    use js_sys::Reflect;
+    use wasm_bindgen::JsValue;
+
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Ok(state) = Reflect::get(window.as_ref(), &JsValue::from_str("skyState")) else {
+        return;
+    };
+    let _ = Reflect::set(
+        &state,
+        &JsValue::from_str("skyReady"),
+        &JsValue::from_bool(true),
+    );
 }
 
 #[cfg(target_arch = "wasm32")]
