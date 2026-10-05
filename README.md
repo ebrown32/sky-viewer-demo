@@ -7,6 +7,9 @@ on desktop, drag the sky with the mouse. Press F2 to view sky viewer information
 F3 to toggle render diagnostics, and F4 to toggle label categories or search for
 an object and smoothly point the view toward it. Initial sky meshes build
 incrementally; frames longer than 100 ms are logged to the browser console.
+Slow sky-update stages are timed separately, and browsers that support the Long
+Tasks API also report long-task attribution to help distinguish application
+work from browser or rendering stalls.
 
 ## Run locally
 

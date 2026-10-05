@@ -57,7 +57,7 @@
           <p>The Moon's phase follows sunlight at the current date and time.</p>
           <p>Press F4 to toggle object label categories.</p>
           <p>Press F3 to view render diagnostics.</p>
-          <p>Frames longer than 100 ms are logged in the browser console.</p>
+          <p>Frames and browser tasks longer than 100 ms, plus slow sky update stages, are logged in the browser console.</p>
           <p>Sky data: HYG star catalog · JPL orbital elements.</p>
         </div>
         <p id="sensor-status" class="sensor-status">Sky view · live</p>
@@ -124,6 +124,31 @@
         const $ = (id) => document.getElementById(id);
         const debugOverlay = $("debug-overlay");
         const slowFrameThresholdMs = 100;
+        if (
+          "PerformanceObserver" in window &&
+          PerformanceObserver.supportedEntryTypes?.includes("longtask")
+        ) {
+          try {
+            const longTaskObserver = new PerformanceObserver((list) => {
+              for (const entry of list.getEntries()) {
+                if (entry.duration < slowFrameThresholdMs) continue;
+                console.warn("[Sky Viewer] Browser long task", {
+                  durationMs: Number(entry.duration.toFixed(1)),
+                  startTimeMs: Number(entry.startTime.toFixed(1)),
+                  name: entry.name,
+                  attribution: entry.attribution?.map((item) => ({
+                    name: item.name,
+                    entryType: item.entryType,
+                    containerType: item.containerType,
+                  })),
+                });
+              }
+            });
+            longTaskObserver.observe({ type: "longtask" });
+          } catch (error) {
+            console.info("[Sky Viewer] Browser long-task diagnostics unavailable", error);
+          }
+        }
         let previousFrameSample = performance.now();
         let previousFrameVisible = document.visibilityState !== "hidden";
         let lastSlowFrameWarning = Number.NEGATIVE_INFINITY;

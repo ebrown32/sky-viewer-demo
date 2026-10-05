@@ -758,11 +758,14 @@ fn update_projected_labels(
         use js_sys::Reflect;
         use wasm_bindgen::JsValue;
 
+        let projection_started = js_sys::Date::now();
         let projected_labels = js_sys::Array::new();
         let objects = js_sys::Array::new();
+        let mut label_count = 0;
         if let Ok((camera, transform)) = cameras.get_single() {
             let camera_transform = GlobalTransform::from(*transform);
             for (label, transform, visibility) in &labels {
+                label_count += 1;
                 let direction = transform.translation.normalize();
                 let heading = (direction.x.atan2(direction.z).to_degrees() as f64)
                     .rem_euclid(360.0);
@@ -805,6 +808,13 @@ fn update_projected_labels(
                 let _ = Reflect::set(&state, &JsValue::from_str("objects"), objects.as_ref());
             }
         }
+        let projection_duration = js_sys::Date::now() - projection_started;
+        if projection_duration >= 100.0 {
+            log_slow_operation(
+                &format!("projected label update ({label_count} labels)"),
+                projection_duration,
+            );
+        }
     }
 }
 
@@ -832,6 +842,8 @@ fn update_sky(
     #[cfg(not(target_arch = "wasm32"))]
     let _ = &view;
 
+    #[cfg(target_arch = "wasm32")]
+    let update_started = js_sys::Date::now();
     let now = unix_seconds();
     let julian_day = astro::julian_date(now);
     let sidereal_time =
@@ -849,6 +861,8 @@ fn update_sky(
     #[cfg(target_arch = "wasm32")]
     update_coordinate_readout(&view, observer.latitude_deg, sidereal_time);
 
+    #[cfg(target_arch = "wasm32")]
+    let positions_started = js_sys::Date::now();
     for (body, mut transform, mut visibility) in &mut bodies {
         let position = body_equatorial(body.0, julian_day);
         let horizontal = astro::equatorial_to_horizontal(
@@ -879,6 +893,11 @@ fn update_sky(
         };
         set_label_transform(&mut transform, horizontal, SKY_RADIUS - 1.5);
     }
+    #[cfg(target_arch = "wasm32")]
+    log_slow_operation(
+        "celestial object positioning",
+        js_sys::Date::now() - positions_started,
+    );
 
     if observer.force_refresh || now - observer.last_refresh >= 30.0 {
         pending_build.0 = Some(SkyMeshBuild::new(
@@ -895,7 +914,7 @@ fn update_sky(
         let chunk_started = js_sys::Date::now();
         let build_complete = build.build_chunk(&catalog.0);
         #[cfg(target_arch = "wasm32")]
-        log_slow_mesh_operation("mesh build chunk", js_sys::Date::now() - chunk_started);
+        log_slow_operation("mesh build chunk", js_sys::Date::now() - chunk_started);
         if build_complete {
             let build = pending_build
                 .0
@@ -911,16 +930,18 @@ fn update_sky(
                 .expect("the Milky Way mesh must remain in the asset store") =
                 build.galaxy.into_mesh();
             #[cfg(target_arch = "wasm32")]
-            log_slow_mesh_operation(
+            log_slow_operation(
                 "mesh finalize and upload",
                 js_sys::Date::now() - finalize_started,
             );
         }
     }
+    #[cfg(target_arch = "wasm32")]
+    log_slow_operation("sky update system", js_sys::Date::now() - update_started);
 }
 
 #[cfg(target_arch = "wasm32")]
-fn log_slow_mesh_operation(stage: &str, duration_ms: f64) {
+fn log_slow_operation(stage: &str, duration_ms: f64) {
     if duration_ms < 100.0 {
         return;
     }
