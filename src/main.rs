@@ -37,6 +37,8 @@ struct Observer {
     longitude_deg: f64,
     last_refresh: f64,
     force_refresh: bool,
+    #[cfg(target_arch = "wasm32")]
+    refresh_reason: Option<SkyMeshRefreshReason>,
 }
 
 impl Default for Observer {
@@ -46,8 +48,22 @@ impl Default for Observer {
             longitude_deg: -122.3321,
             last_refresh: 0.0,
             force_refresh: true,
+            #[cfg(target_arch = "wasm32")]
+            refresh_reason: None,
         }
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Copy)]
+enum SkyMeshRefreshReason {
+    Startup,
+    LocationChanged {
+        previous_latitude_deg: f64,
+        previous_longitude_deg: f64,
+    },
+    Periodic,
+    Forced,
 }
 
 #[derive(Resource)]
@@ -252,6 +268,8 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut observer: ResMut<Observer>,
     mut pending_build: ResMut<PendingSkyMeshBuild>,
+    #[cfg(target_arch = "wasm32")]
+    catalog: Res<StarCatalog>,
 ) {
     commands.spawn(Camera3dBundle {
         projection: PerspectiveProjection {
@@ -324,8 +342,19 @@ fn setup(
         sidereal_time,
         julian_day,
     ));
+    #[cfg(target_arch = "wasm32")]
+    log_sky_mesh_refresh(
+        SkyMeshRefreshReason::Startup,
+        observer.latitude_deg,
+        observer.longitude_deg,
+        catalog.0.len(),
+    );
     observer.last_refresh = now;
     observer.force_refresh = false;
+    #[cfg(target_arch = "wasm32")]
+    {
+        observer.refresh_reason = None;
+    }
 
     let sphere_mesh = meshes.add(
         Sphere::new(0.5)
@@ -680,6 +709,10 @@ fn read_browser_controls(
                         && ((latitude - observer.latitude_deg).abs() > 1.0e-5
                             || (longitude - observer.longitude_deg).abs() > 1.0e-5)
                     {
+                        observer.refresh_reason = Some(SkyMeshRefreshReason::LocationChanged {
+                            previous_latitude_deg: observer.latitude_deg,
+                            previous_longitude_deg: observer.longitude_deg,
+                        });
                         observer.latitude_deg = latitude;
                         observer.longitude_deg = longitude;
                         observer.force_refresh = true;
@@ -899,7 +932,23 @@ fn update_sky(
         js_sys::Date::now() - positions_started,
     );
 
-    if observer.force_refresh || now - observer.last_refresh >= 30.0 {
+    let periodic_refresh_due = now - observer.last_refresh >= 30.0;
+    if observer.force_refresh || periodic_refresh_due {
+        #[cfg(target_arch = "wasm32")]
+        log_sky_mesh_refresh(
+            observer.refresh_reason.unwrap_or(if periodic_refresh_due {
+                SkyMeshRefreshReason::Periodic
+            } else {
+                SkyMeshRefreshReason::Forced
+            }),
+            observer.latitude_deg,
+            observer.longitude_deg,
+            catalog.0.len(),
+        );
+        #[cfg(target_arch = "wasm32")]
+        {
+            observer.refresh_reason = None;
+        }
         pending_build.0 = Some(SkyMeshBuild::new(
             observer.latitude_deg,
             sidereal_time,
@@ -938,6 +987,49 @@ fn update_sky(
     }
     #[cfg(target_arch = "wasm32")]
     log_slow_operation("sky update system", js_sys::Date::now() - update_started);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn log_sky_mesh_refresh(
+    reason: SkyMeshRefreshReason,
+    latitude_deg: f64,
+    longitude_deg: f64,
+    star_count: usize,
+) {
+    use js_sys::Reflect;
+    use wasm_bindgen::{JsCast, JsValue};
+
+    let reason_details = match reason {
+        SkyMeshRefreshReason::LocationChanged {
+            previous_latitude_deg,
+            previous_longitude_deg,
+        } => format!(
+            "reason=location changed, from=({previous_latitude_deg:.5}, \
+             {previous_longitude_deg:.5}),"
+        ),
+        SkyMeshRefreshReason::Startup => "reason=startup,".to_owned(),
+        SkyMeshRefreshReason::Periodic => "reason=periodic,".to_owned(),
+        SkyMeshRefreshReason::Forced => "reason=forced,".to_owned(),
+    };
+    let message = JsValue::from_str(&format!(
+        "[Sky Viewer] Starting sky mesh rebuild: {reason_details} \
+         to=({latitude_deg:.5}, {longitude_deg:.5}), stars={star_count}, \
+         galaxySegments={GALAXY_SEGMENTS}"
+    ));
+
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Ok(console) = Reflect::get(window.as_ref(), &JsValue::from_str("console")) else {
+        return;
+    };
+    let Ok(info) = Reflect::get(&console, &JsValue::from_str("info")) else {
+        return;
+    };
+    let Some(info) = info.dyn_ref::<js_sys::Function>() else {
+        return;
+    };
+    let _ = info.call1(&console, &message);
 }
 
 #[cfg(target_arch = "wasm32")]
