@@ -20,8 +20,11 @@ work from browser or rendering stalls.
 Install Rust and Cargo, then run:
 
 ```sh
-./launch.sh
+./launch.sh [--debug|--release]
 ```
+
+The default is `--debug`, which includes debug symbols. Use `--release` for a
+fully optimized build without debug symbols.
 
 The launcher installs Trunk with Cargo if needed and uses `apt-get` to install
 the WebAssembly Rust standard library and linker when they are missing. On

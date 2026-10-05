@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if (($# > 1)); then
+    echo "Usage: $0 [--debug|--release]" >&2
+    exit 2
+fi
+
+trunk_args=()
+case "${1:---debug}" in
+    --debug) ;;
+    --release) trunk_args+=(--release) ;;
+    *)
+        echo "Usage: $0 [--debug|--release]" >&2
+        exit 2
+        ;;
+esac
+
 CARGO_BIN="${CARGO_HOME:-$HOME/.cargo}/bin"
 export PATH="$CARGO_BIN:$PATH"
 
@@ -57,4 +72,4 @@ if ! command -v rust-lld >/dev/null 2>&1; then
     exit 1
 fi
 
-exec trunk serve --address 0.0.0.0 --port 8080
+exec trunk serve --address 0.0.0.0 --port 8080 "${trunk_args[@]}"
