@@ -198,7 +198,13 @@ impl LabelCategory {
 }
 
 fn remains_visible_below_horizon(category: LabelCategory) -> bool {
-    matches!(category, LabelCategory::Star | LabelCategory::SagittariusA)
+    matches!(
+        category,
+        LabelCategory::Constellation
+            | LabelCategory::Star
+            | LabelCategory::SagittariusA
+            | LabelCategory::Galaxy
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -1172,9 +1178,11 @@ mod tests {
     }
 
     #[test]
-    fn star_and_sagittarius_a_labels_remain_visible_below_horizon() {
+    fn deep_sky_labels_remain_visible_below_horizon() {
+        assert!(remains_visible_below_horizon(LabelCategory::Constellation));
         assert!(remains_visible_below_horizon(LabelCategory::Star));
         assert!(remains_visible_below_horizon(LabelCategory::SagittariusA));
+        assert!(remains_visible_below_horizon(LabelCategory::Galaxy));
         assert!(!remains_visible_below_horizon(LabelCategory::Planet));
     }
 
