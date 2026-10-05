@@ -186,6 +186,9 @@ struct ProjectedLabel {
 #[derive(Clone, Copy, Component)]
 struct SkyLabel(Equatorial);
 
+#[derive(Component)]
+struct PipelineWarmup;
+
 #[derive(Clone, Copy)]
 enum LabelCategory {
     SunMoon,
@@ -300,7 +303,8 @@ fn setup(
         },
         SunDirectionLight,
     ));
-    let star_mesh = meshes.add(MeshBuffers::default().into_mesh());
+    // Non-empty placeholders queue these sky pipeline variants while startup is still covered.
+    let star_mesh = meshes.add(pipeline_warmup_mesh());
     let star_material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         emissive: LinearRgba::WHITE,
@@ -316,7 +320,7 @@ fn setup(
         })
         .insert(bevy::render::view::visibility::NoFrustumCulling);
 
-    let galaxy_mesh = meshes.add(MeshBuffers::default().into_mesh());
+    let galaxy_mesh = meshes.add(pipeline_warmup_mesh());
     let galaxy_material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         unlit: true,
@@ -342,6 +346,7 @@ fn setup(
             .ico(3)
             .expect("a low-subdivision sphere is valid"),
     );
+    let mut warmed_unlit_body_pipeline = false;
     for kind in all_bodies() {
         let (name, color, scale) = body_appearance(kind);
         let moon = matches!(kind, BodyKind::Moon);
@@ -355,6 +360,22 @@ fn setup(
             unlit: !moon,
             ..default()
         });
+        if moon || !warmed_unlit_body_pipeline {
+            // Warm the sphere variants even when the corresponding body is below the horizon.
+            commands.spawn((
+                PbrBundle {
+                    mesh: sphere_mesh.clone(),
+                    material: material.clone(),
+                    transform: Transform::from_translation(Vec3::splat(100_000.0)),
+                    ..default()
+                },
+                bevy::render::view::visibility::NoFrustumCulling,
+                PipelineWarmup,
+            ));
+            if !moon {
+                warmed_unlit_body_pipeline = true;
+            }
+        }
         commands.spawn((
             PbrBundle {
                 mesh: sphere_mesh.clone(),
@@ -855,6 +876,7 @@ fn update_projected_labels(
 }
 
 fn update_sky(
+    mut commands: Commands,
     mut observer: ResMut<Observer>,
     mut pending_build: ResMut<PendingSkyMeshBuild>,
     view: Res<ViewDirection>,
@@ -874,6 +896,7 @@ fn update_sky(
         (&SkyLabel, &ProjectedLabel, &mut Transform, &mut Visibility),
         Without<CelestialBody>,
     >,
+    pipeline_warmups: Query<Entity, With<PipelineWarmup>>,
 ) {
     #[cfg(not(target_arch = "wasm32"))]
     let _ = &view;
@@ -977,6 +1000,9 @@ fn update_sky(
                 .get_mut(&scene.galaxy)
                 .expect("the Milky Way mesh must remain in the asset store") =
                 build.galaxy.into_mesh();
+            for entity in &pipeline_warmups {
+                commands.entity(entity).despawn();
+            }
             #[cfg(target_arch = "wasm32")]
             log_slow_operation(
                 "mesh finalize and upload",
@@ -1168,6 +1194,18 @@ fn append_galaxy_mesh_range(
     }
 }
 
+fn pipeline_warmup_mesh() -> Mesh {
+    let mut buffers = MeshBuffers::default();
+    append_quad(
+        &mut buffers,
+        Vec3::ZERO,
+        Vec3::Z,
+        0.001,
+        [0.0, 0.0, 0.0, 0.0],
+    );
+    buffers.into_mesh()
+}
+
 fn append_quad(
     buffers: &mut MeshBuffers,
     center: Vec3,
@@ -1301,6 +1339,7 @@ fn update_coordinate_readout(view: &ViewDirection, latitude_deg: f64, sidereal_t
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::render::mesh::VertexAttributeValues;
 
     #[test]
     fn sunlight_points_from_the_sun_toward_the_sky_scene() {
@@ -1366,6 +1405,17 @@ mod tests {
         assert_eq!(buffers.indices.len(), GALAXY_SEGMENTS * 6);
         assert!(buffers.colors.iter().any(|color| color[3] < 0.08));
         assert!(buffers.colors.iter().any(|color| color[3] >= 0.08));
+    }
+
+    #[test]
+    fn pipeline_warmup_mesh_is_nonempty_and_transparent() {
+        let mesh = pipeline_warmup_mesh();
+        assert_eq!(mesh.count_vertices(), 4);
+        let colors = mesh.attribute(Mesh::ATTRIBUTE_COLOR).unwrap();
+        let VertexAttributeValues::Float32x4(colors) = colors else {
+            panic!("pipeline warmup colors must use the mesh color format");
+        };
+        assert!(colors.iter().all(|color| color[3] == 0.0));
     }
 
     #[test]
