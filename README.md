@@ -8,13 +8,15 @@ including draw calls and a frame-timing graph.
 
 ## Run locally
 
-Install Rust, the `wasm32-unknown-unknown` target, and Trunk from its official
-release, then run:
+Install Rust and Cargo, then run:
 
 ```sh
-rustup target add wasm32-unknown-unknown
-trunk serve
+./launch.sh
 ```
+
+The launcher installs Trunk with Cargo if needed and uses `apt-get` to install
+the WebAssembly Rust standard library and linker when they are missing. On
+Debian-based systems, package installation requires apt privileges.
 
 Open the local HTTPS/localhost URL printed by Trunk. Browser geolocation and
 motion sensors require a secure context; `localhost` qualifies. To check the
