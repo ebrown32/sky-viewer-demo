@@ -24,7 +24,17 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Cache Trunk
+        id: trunk-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/trunk
+          key: ${{ runner.os }}-trunk-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-trunk-
+
       - name: Install Trunk
+        if: steps.trunk-cache.outputs.cache-hit != 'true'
         run: cargo install --locked trunk
 
       - name: Build site
