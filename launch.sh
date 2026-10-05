@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec trunk serve --address 0.0.0.0 --port 8080
