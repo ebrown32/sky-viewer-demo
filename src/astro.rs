@@ -461,6 +461,57 @@ mod tests {
     }
 
     #[test]
+    fn celestial_poles_follow_latitude_independently_of_time_and_longitude() {
+        for latitude in [-80.0, -47.6, 0.0, 30.0, 47.6, 80.0] {
+            for longitude in [-180.0, -122.3, 0.0, 120.0, 180.0] {
+                for day in [2_451_545.0, 2_461_000.5, 2_461_000.75] {
+                    let sidereal_time = local_sidereal_time_deg(day, longitude);
+                    for (declination, azimuth, altitude) in
+                        [(90.0, 0.0, latitude), (-90.0, 180.0, -latitude)]
+                    {
+                        let pole = equatorial_to_horizontal(
+                            Equatorial { ra_deg: 37.95, dec_deg: declination },
+                            latitude,
+                            sidereal_time,
+                        );
+                        assert!(normalize_signed_degrees(pole.azimuth_deg - azimuth).abs() < 1.0e-9);
+                        assert!((pole.altitude_deg - altitude).abs() < 1.0e-9);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn equatorial_stars_rise_in_the_east_and_set_in_the_west() {
+        let star = Equatorial { ra_deg: 123.4, dec_deg: 0.0 };
+        for latitude in [-60.0, 0.0, 47.6, 60.0] {
+            for (hour_angle, azimuth) in [(-90.0, 90.0), (90.0, 270.0)] {
+                let direction = equatorial_to_horizontal(star, latitude, star.ra_deg + hour_angle);
+                assert!((direction.altitude_deg).abs() < 1.0e-9);
+                assert!((direction.azimuth_deg - azimuth).abs() < 1.0e-9);
+            }
+        }
+    }
+
+    #[test]
+    fn horizon_round_trips_across_hemispheres_and_sidereal_times() {
+        for latitude in [-80.0, -47.6, 0.0, 47.6, 80.0] {
+            for sidereal_time in [0.0, 123.4, 359.9] {
+                for heading in [0.0, 45.0, 90.0, 180.0, 270.0, 359.9] {
+                    for altitude in [-85.0, -30.0, 0.0, 30.0, 85.0] {
+                        let horizontal = Horizontal { azimuth_deg: heading, altitude_deg: altitude };
+                        let equatorial = horizontal_to_equatorial(horizontal, latitude, sidereal_time);
+                        let actual = equatorial_to_horizontal(equatorial, latitude, sidereal_time);
+                        assert!(normalize_signed_degrees(actual.azimuth_deg - heading).abs() < 1.0e-8);
+                        assert!((actual.altitude_deg - altitude).abs() < 1.0e-8);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn galactic_center_and_pole_have_expected_equatorial_coordinates() {
         let center = galactic_to_equatorial(0.0, 0.0);
         let north_pole = galactic_to_equatorial(0.0, 90.0);

@@ -11,6 +11,7 @@
     <title>Sky Viewer</title>
     <link data-trunk rel="css" href="style.css" />
     <link data-trunk rel="rust" />
+    <link data-trunk rel="copy-file" href="src/orientation.mjs" />
   </head>
   <body>
     <main class="app">
@@ -237,7 +238,8 @@
       </aside>
     </main>
 
-    <script>
+    <script type="module">
+      import { deviceOrientationToHorizontal, syntheticDeviceOrientation } from "./orientation.mjs";
       (() => {
         const $ = (id) => document.getElementById(id);
         const debugOverlay = $("debug-overlay");
@@ -703,26 +705,36 @@
         }
 
         let orientationListening = false;
+        let compassOffset = null;
+        let absoluteOrientationReceived = false;
         const onOrientation = (event) => {
           if (searchOverride) return;
-          if (!Number.isFinite(event.alpha) || !Number.isFinite(event.beta)) {
+          if (![event.alpha, event.beta, event.gamma].every(Number.isFinite)) {
             $("sensor-status").textContent = "COMPASS DATA UNAVAILABLE";
             return;
           }
-          const screenAngle = window.screen.orientation?.angle || 0;
-          // Keep compass yaw independent from pitch so tilting cannot flip the view.
-          const heading = 360 - event.alpha + screenAngle;
-          state.heading = ((heading % 360) + 360) % 360;
-          state.altitude = Math.max(-85, Math.min(85, event.beta));
+          if (absoluteOrientationReceived && !event.absolute) return;
+          const direction = deviceOrientationToHorizontal(event, state.heading, compassOffset);
+          compassOffset = direction.compassOffset;
+          absoluteOrientationReceived ||= Boolean(event.absolute);
+          state.heading = direction.heading;
+          state.altitude = direction.altitude;
           state.sensorActive = true;
           state.manualActive = false;
-          state.sensorAbsolute = Boolean(event.absolute);
-          $("compass-status").textContent = event.absolute
-            ? "Compass active · heading referenced to true north"
-            : "Compass active · calibrate your device for true north";
-          $("sensor-status").textContent = event.absolute
-            ? "COMPASS · TRUE NORTH"
+          state.sensorAbsolute = direction.absolute;
+          $("compass-status").textContent = direction.absolute
+            ? "Compass active · north-referenced heading (magnetic north may differ from true north)"
+            : "Relative orientation only · compass north is unavailable";
+          $("sensor-status").textContent = direction.absolute
+            ? "COMPASS · NORTH REFERENCED"
             : "COMPASS · RELATIVE HEADING";
+        };
+        const listenForOrientation = () => {
+          if (orientationListening) return;
+          for (const type of ["deviceorientationabsolute", "deviceorientation"]) {
+            window.addEventListener(type, onOrientation, { passive: true });
+          }
+          orientationListening = true;
         };
 
         const enableSensors = async () => {
@@ -742,7 +754,9 @@
             const permissionRequests = [];
             for (const sensor of [motion, orientation]) {
               if (typeof sensor?.requestPermission === "function") {
-                permissionRequests.push(sensor.requestPermission());
+                permissionRequests.push(sensor === orientation
+                  ? sensor.requestPermission(true)
+                  : sensor.requestPermission());
               }
             }
             const permissions = await Promise.all(permissionRequests);
@@ -752,12 +766,7 @@
               $("sensor-status").textContent = "MOTION SENSORS · PERMISSION DENIED";
               return false;
             }
-            if (!orientationListening) {
-              window.addEventListener("deviceorientation", onOrientation, {
-                passive: true,
-              });
-              orientationListening = true;
-            }
+            listenForOrientation();
             $("compass-status").textContent =
               "Waiting for accelerometer and compass readings…";
             $("sensor-status").textContent = "MOTION SENSORS · WAITING";
@@ -785,12 +794,9 @@
           const pitch = $("sensor-test-pitch").valueAsNumber;
           if (!sensorTestForm.reportValidity()) return;
           const event = new Event("deviceorientation");
-          for (const [key, value] of Object.entries({
-            alpha: (360 - yaw + (window.screen.orientation?.angle || 0)) % 360,
-            beta: pitch,
-            gamma: 0,
-            absolute: true,
-          })) {
+          for (const [key, value] of Object.entries(syntheticDeviceOrientation(
+            yaw, pitch, window.screen.orientation?.angle || 0,
+          ))) {
             Object.defineProperty(event, key, { value });
           }
           window.dispatchEvent(event);
@@ -805,12 +811,7 @@
         });
         if (sensorTestMode) {
           sensorTestPanel.hidden = false;
-          if (!orientationListening) {
-            window.addEventListener("deviceorientation", onOrientation, {
-              passive: true,
-            });
-            orientationListening = true;
-          }
+          listenForOrientation();
           applyFakeOrientation();
         }
 

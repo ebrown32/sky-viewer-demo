@@ -29,6 +29,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Check sensor and astronomy regressions
+        run: |
+          node --test tests/orientation.test.mjs
+          rustc --edition=2021 --test src/astro.rs -o /tmp/sky-astro-tests
+          /tmp/sky-astro-tests
+
       - name: Cache Trunk
         id: trunk-cache
         uses: actions/cache@v4

@@ -732,7 +732,7 @@ fn read_browser_controls(
                         if heading.is_finite() && altitude.is_finite() {
                             view.azimuth_rad = (heading as f32).to_radians();
                             view.altitude_rad =
-                                (altitude as f32).clamp(-85.0, 85.0).to_radians();
+                                (altitude as f32).clamp(-90.0, 90.0).to_radians();
                         }
                     }
                 }
@@ -803,7 +803,7 @@ fn update_camera(
 }
 
 fn view_rotation(view: &ViewDirection) -> Quat {
-    Quat::from_rotation_y(std::f32::consts::PI + view.azimuth_rad)
+    Quat::from_rotation_y(-view.azimuth_rad)
         * Quat::from_rotation_x(view.altitude_rad)
 }
 
@@ -828,7 +828,7 @@ fn update_projected_labels(
             for (label, transform, visibility) in &labels {
                 label_count += 1;
                 let direction = transform.translation.normalize();
-                let heading = (direction.x.atan2(direction.z).to_degrees() as f64)
+                let heading = (direction.x.atan2(-direction.z).to_degrees() as f64)
                     .rem_euclid(360.0);
                 let altitude = direction.y.clamp(-1.0, 1.0).asin().to_degrees() as f64;
                 let object = js_sys::Array::new();
@@ -1268,7 +1268,7 @@ fn horizontal_vector(horizontal: Horizontal) -> Vec3 {
     Vec3::new(
         altitude.cos() * azimuth.sin(),
         altitude.sin(),
-        altitude.cos() * azimuth.cos(),
+        -altitude.cos() * azimuth.cos(),
     )
 }
 
@@ -1360,10 +1360,46 @@ mod tests {
             let expected = Vec3::new(
                 altitude.to_radians().cos() * azimuth.sin(),
                 altitude.to_radians().sin(),
-                altitude.to_radians().cos() * azimuth.cos(),
+                -altitude.to_radians().cos() * azimuth.cos(),
             );
             assert!((forward - expected).length() < 1.0e-5);
+            let right = rotation * Vec3::X;
+            let expected_right = Vec3::new(azimuth.cos(), 0.0, azimuth.sin());
+            assert!((right - expected_right).length() < 1.0e-5);
         }
+    }
+
+    #[test]
+    fn camera_yaw_and_sky_vectors_use_an_unmirrored_local_horizon_frame() {
+        for heading in [0.0_f32, 45.0, 90.0, 180.0, 270.0, 359.0] {
+            for altitude in [-90.0_f32, -60.0, 0.0, 60.0, 90.0] {
+                let view = ViewDirection {
+                    azimuth_rad: heading.to_radians(),
+                    altitude_rad: altitude.to_radians(),
+                    ..default()
+                };
+                let rotation = view_rotation(&view);
+                let forward = horizontal_vector(Horizontal {
+                    azimuth_deg: heading as f64,
+                    altitude_deg: altitude as f64,
+                });
+                assert!((rotation * Vec3::NEG_Z - forward).length() < 1.0e-5);
+                let east_of_view = horizontal_vector(Horizontal {
+                    azimuth_deg: (heading + 10.0) as f64,
+                    altitude_deg: 0.0,
+                });
+                assert!((rotation.inverse() * east_of_view).x > 0.0);
+                let zenith_in_view = rotation.inverse() * Vec3::Y;
+                assert!(zenith_in_view.x.abs() < 1.0e-5);
+                assert!(zenith_in_view.y >= -1.0e-5);
+            }
+        }
+        assert!((horizontal_vector(Horizontal {
+            azimuth_deg: 0.0, altitude_deg: 0.0,
+        }) - Vec3::NEG_Z).length() < 1.0e-5);
+        assert!((horizontal_vector(Horizontal {
+            azimuth_deg: 90.0, altitude_deg: 0.0,
+        }) - Vec3::X).length() < 1.0e-5);
     }
 
     #[test]
