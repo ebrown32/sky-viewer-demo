@@ -430,6 +430,37 @@ mod tests {
     }
 
     #[test]
+    fn north_celestial_pole_is_over_north_at_the_observers_latitude() {
+        let pole = equatorial_to_horizontal(
+            Equatorial {
+                ra_deg: 0.0,
+                dec_deg: 90.0,
+            },
+            47.6,
+            123.4,
+        );
+
+        assert!(pole.azimuth_deg.min(360.0 - pole.azimuth_deg) < 1.0e-9);
+        assert!((pole.altitude_deg - 47.6).abs() < 1.0e-9);
+    }
+
+    #[test]
+    fn polaris_is_near_the_north_horizon_direction_not_the_zenith() {
+        let polaris = equatorial_to_horizontal(
+            Equatorial {
+                ra_deg: 37.954_560_67,
+                dec_deg: 89.264_108_97,
+            },
+            47.6062,
+            37.954_560_67,
+        );
+
+        assert!(polaris.azimuth_deg < 1.0 || polaris.azimuth_deg > 359.0);
+        assert!((polaris.altitude_deg - 47.6062).abs() < 1.0);
+        assert!(polaris.altitude_deg < 90.0);
+    }
+
+    #[test]
     fn galactic_center_and_pole_have_expected_equatorial_coordinates() {
         let center = galactic_to_equatorial(0.0, 0.0);
         let north_pole = galactic_to_equatorial(0.0, 90.0);

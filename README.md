@@ -72,5 +72,10 @@ These are intended for a visual sky guide, not navigation or astrometry.
 
 The star coordinates are transformed from equatorial to local horizontal
 coordinates using the observer's latitude, longitude, and local sidereal time.
-Right ascension and declination shown in the interface describe the direction
-at the center of the view.
+Right ascension and declination are coordinates on the celestial sphere;
+altitude and azimuth describe a direction in the observer's local horizon
+frame. The phone's compass heading and pitch are interpreted in that local
+frame before the view center is converted back to right ascension and
+declination. For example, the north celestial pole is due north at an altitude
+equal to the observer's latitude. Polaris is close to that pole, so from
+Seattle it appears about 48 degrees above the northern horizon, not overhead.

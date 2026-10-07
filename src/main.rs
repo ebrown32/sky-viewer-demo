@@ -795,12 +795,16 @@ fn update_camera(
     view: Res<ViewDirection>,
     mut cameras: Query<(&mut Camera, &mut Transform), With<Camera3d>>,
 ) {
-    let camera_rotation = Quat::from_rotation_y(std::f32::consts::PI + view.azimuth_rad)
-        * Quat::from_rotation_x(view.altitude_rad);
+    let camera_rotation = view_rotation(&view);
     for (mut camera, mut transform) in &mut cameras {
         camera.is_active = true;
         transform.rotation = camera_rotation;
     }
+}
+
+fn view_rotation(view: &ViewDirection) -> Quat {
+    Quat::from_rotation_y(std::f32::consts::PI + view.azimuth_rad)
+        * Quat::from_rotation_x(view.altitude_rad)
 }
 
 fn update_projected_labels(
@@ -1340,6 +1344,27 @@ fn update_coordinate_readout(view: &ViewDirection, latitude_deg: f64, sidereal_t
 mod tests {
     use super::*;
     use bevy::render::mesh::VertexAttributeValues;
+
+    #[test]
+    fn pitching_changes_elevation_without_changing_compass_heading() {
+        let azimuth = 123.0_f32.to_radians();
+        for altitude in [-60.0_f32, 0.0, 60.0] {
+            let view = ViewDirection {
+                azimuth_rad: azimuth,
+                altitude_rad: altitude.to_radians(),
+                sensor_active: false,
+                manual_active: false,
+            };
+            let rotation = view_rotation(&view);
+            let forward = rotation * Vec3::NEG_Z;
+            let expected = Vec3::new(
+                altitude.to_radians().cos() * azimuth.sin(),
+                altitude.to_radians().sin(),
+                altitude.to_radians().cos() * azimuth.cos(),
+            );
+            assert!((forward - expected).length() < 1.0e-5);
+        }
+    }
 
     #[test]
     fn sunlight_points_from_the_sun_toward_the_sky_scene() {

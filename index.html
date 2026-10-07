@@ -705,27 +705,15 @@
         let orientationListening = false;
         const onOrientation = (event) => {
           if (searchOverride) return;
-          if (event.alpha === null || event.beta === null) {
+          if (!Number.isFinite(event.alpha) || !Number.isFinite(event.beta)) {
             $("sensor-status").textContent = "COMPASS DATA UNAVAILABLE";
             return;
           }
           const screenAngle = window.screen.orientation?.angle || 0;
-          // Project the device's top edge onto east, north, and up axes.
-          const alpha = (event.alpha - screenAngle) * (Math.PI / 180);
-          const beta = event.beta * (Math.PI / 180);
-          const horizontalScale = Math.cos(beta);
-          const east = -Math.sin(alpha) * horizontalScale;
-          const north = Math.cos(alpha) * horizontalScale;
-          const up = Math.sin(beta);
-          const horizontalLength = Math.hypot(east, north);
-          if (horizontalLength > 1e-6) {
-            state.heading =
-              ((Math.atan2(east, north) * (180 / Math.PI)) % 360 + 360) % 360;
-          }
-          state.altitude = Math.max(
-            -85,
-            Math.min(85, Math.atan2(up, horizontalLength) * (180 / Math.PI)),
-          );
+          // Keep compass yaw independent from pitch so tilting cannot flip the view.
+          const heading = 360 - event.alpha + screenAngle;
+          state.heading = ((heading % 360) + 360) % 360;
+          state.altitude = Math.max(-85, Math.min(85, event.beta));
           state.sensorActive = true;
           state.manualActive = false;
           state.sensorAbsolute = Boolean(event.absolute);
