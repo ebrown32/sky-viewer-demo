@@ -32,8 +32,11 @@ the WebAssembly Rust standard library and linker when they are missing. On
 Debian-based systems, package installation requires apt privileges.
 
 Open the local HTTPS/localhost URL printed by Trunk. Browser geolocation and
-motion sensors require a secure context; `localhost` qualifies. To check the
-astronomy calculations without building the Bevy app:
+motion sensors require a secure context; `localhost` qualifies.
+Append `?sensor-test` to the URL to open the device orientation test panel.
+Enter a compass heading and pitch to send synthetic orientation readings
+through the same handler used by the phone sensors; press F5 to hide or show
+the panel. To check the astronomy calculations without building the Bevy app:
 
 ```sh
 rustc --edition=2021 --test src/astro.rs -o /tmp/sky-astro-tests

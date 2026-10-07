@@ -191,6 +191,50 @@
         <div class="debug-graph-legend"><span><i></i>16.7 ms target</span><span>120 frames</span></div>
       </aside>
 
+      <aside
+        id="sensor-test-panel"
+        class="sensor-test-panel"
+        aria-label="Device orientation test"
+        hidden
+      >
+        <div class="label-panel-header">
+          <strong>Device orientation test</strong>
+          <kbd>F5</kbd>
+        </div>
+        <p>
+          Enter a fake compass heading and phone pitch. Positive pitch points up.
+        </p>
+        <form id="sensor-test-form">
+          <label>
+            Yaw · compass heading
+            <input
+              id="sensor-test-yaw"
+              type="number"
+              min="0"
+              max="360"
+              step="any"
+              value="0"
+              required
+            />
+          </label>
+          <label>
+            Pitch · elevation
+            <input
+              id="sensor-test-pitch"
+              type="number"
+              min="-85"
+              max="85"
+              step="any"
+              value="0"
+              required
+            />
+          </label>
+          <button class="startup-primary" type="submit">Apply fake orientation</button>
+        </form>
+        <p id="sensor-test-result" role="status" aria-live="polite">
+          Yaw 000° · pitch +00°
+        </p>
+      </aside>
     </main>
 
     <script>
@@ -363,7 +407,13 @@
         };
 
         window.addEventListener("keydown", (event) => {
-          if (event.code === "F2") {
+          if (event.code === "F5" && sensorTestMode) {
+            event.preventDefault();
+            if (!event.repeat) {
+              const panel = $("sensor-test-panel");
+              panel.hidden = !panel.hidden;
+            }
+          } else if (event.code === "F2") {
             event.preventDefault();
             if (!event.repeat) {
               const infoPanel = $("info-panel");
@@ -385,6 +435,9 @@
         const isMobile =
           /iPhone|iPod|Android.*Mobile|Mobile/i.test(navigator.userAgent) ||
           matchMedia("(pointer: coarse) and (max-width: 700px)").matches;
+        const sensorTestMode = new URLSearchParams(window.location.search).has(
+          "sensor-test",
+        );
         const state = (window.skyState = {
           ...defaultCoordinates,
           heading: 0,
@@ -514,7 +567,17 @@
             showStartupChoices();
           }
         };
-        if (isMobile) {
+        if (sensorTestMode) {
+          startupTitle.textContent = "Device orientation test";
+          startupDescription.textContent =
+            "Test the sky direction with synthetic phone yaw and pitch values.";
+          startupStatus.hidden = true;
+          startSkyAt(
+            defaultCoordinates.latitude,
+            defaultCoordinates.longitude,
+            "Starting device orientation test…",
+          );
+        } else if (isMobile) {
           startupTitle.textContent = "Point your phone at the sky";
           startupDescription.textContent =
             "Allow access to your phone's accelerometer and compass so the sky follows where you point it. Sensor data stays on this device.";
@@ -647,8 +710,22 @@
             return;
           }
           const screenAngle = window.screen.orientation?.angle || 0;
-          state.heading = ((360 - event.alpha + screenAngle) % 360 + 360) % 360;
-          state.altitude = Math.max(-85, Math.min(85, 90 - event.beta));
+          // Project the device's top edge onto east, north, and up axes.
+          const alpha = (event.alpha - screenAngle) * (Math.PI / 180);
+          const beta = event.beta * (Math.PI / 180);
+          const horizontalScale = Math.cos(beta);
+          const east = -Math.sin(alpha) * horizontalScale;
+          const north = Math.cos(alpha) * horizontalScale;
+          const up = Math.sin(beta);
+          const horizontalLength = Math.hypot(east, north);
+          if (horizontalLength > 1e-6) {
+            state.heading =
+              ((Math.atan2(east, north) * (180 / Math.PI)) % 360 + 360) % 360;
+          }
+          state.altitude = Math.max(
+            -85,
+            Math.min(85, Math.atan2(up, horizontalLength) * (180 / Math.PI)),
+          );
           state.sensorActive = true;
           state.manualActive = false;
           state.sensorAbsolute = Boolean(event.absolute);
@@ -713,6 +790,41 @@
           startupStatus.textContent = "Checking your saved location…";
           void useSavedLocationPermission();
         });
+        const sensorTestPanel = $("sensor-test-panel");
+        const sensorTestForm = $("sensor-test-form");
+        const applyFakeOrientation = () => {
+          const yaw = $("sensor-test-yaw").valueAsNumber;
+          const pitch = $("sensor-test-pitch").valueAsNumber;
+          if (!sensorTestForm.reportValidity()) return;
+          const event = new Event("deviceorientation");
+          for (const [key, value] of Object.entries({
+            alpha: (360 - yaw + (window.screen.orientation?.angle || 0)) % 360,
+            beta: pitch,
+            gamma: 0,
+            absolute: true,
+          })) {
+            Object.defineProperty(event, key, { value });
+          }
+          window.dispatchEvent(event);
+          const yawOutput = String(Math.round(state.heading) % 360).padStart(3, "0");
+          const pitchOutput = Math.round(state.altitude);
+          $("sensor-test-result").textContent =
+            `Yaw ${yawOutput}° · pitch ${pitchOutput >= 0 ? "+" : ""}${pitchOutput}°`;
+        };
+        sensorTestForm.addEventListener("submit", (event) => {
+          event.preventDefault();
+          applyFakeOrientation();
+        });
+        if (sensorTestMode) {
+          sensorTestPanel.hidden = false;
+          if (!orientationListening) {
+            window.addEventListener("deviceorientation", onOrientation, {
+              passive: true,
+            });
+            orientationListening = true;
+          }
+          applyFakeOrientation();
+        }
 
         const formatRa = (degrees) => {
           const hours = ((degrees / 15) % 24 + 24) % 24;
