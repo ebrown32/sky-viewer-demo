@@ -46,9 +46,11 @@ cooldown (`.cargo/config.toml`). Use a Cargo release that supports
 ## Continuous integration
 
 The GitHub Actions workflow builds the WebAssembly app and deploys it to GitHub
-on pushes to `main` (or when run manually), caching Rust build artifacts and
-Trunk to speed up later runs. GitHub Pages deployment is deferred while this
-repository is private.
+Pages on pushes to `main` (or when run manually), caching Rust build artifacts
+and Trunk to speed up later runs. In the repository settings, set **Pages >
+Build and deployment > Source** to **GitHub Actions**. The published site uses
+the repository path, so its URL is
+`https://<owner>.github.io/<repository>/`.
 
 ## Sky data and calculations
 
