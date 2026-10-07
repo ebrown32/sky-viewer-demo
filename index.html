@@ -27,10 +27,15 @@
         <section class="startup-card">
           <p class="eyebrow">SKY VIEWER</p>
           <h1 id="startup-title">Choose your location</h1>
-          <p class="startup-description">
+          <p id="startup-description" class="startup-description">
             Use your device location or enter coordinates for your sky. Your
             location stays in this browser.
           </p>
+          <div id="startup-sensor-actions" class="startup-actions" hidden>
+            <button id="enable-sensors" class="startup-primary" type="button">
+              Allow motion sensors
+            </button>
+          </div>
           <div id="startup-actions" class="startup-actions" hidden>
             <form id="startup-coordinate-form">
               <div class="startup-coordinate-fields">
@@ -116,7 +121,10 @@
         <p class="privacy-note">Your location stays in this browser.</p>
         <div class="info-details">
           <p><strong>Objects:</strong> Stars · Planets · Milky Way</p>
-          <p>Drag to pan the sky. On mobile, enable the compass to follow your device orientation.</p>
+          <p id="navigation-help">
+            Drag to pan the sky. On phones, allow motion sensors to point the sky
+            by moving your device.
+          </p>
           <p>If location access is unavailable, the view uses the default coordinates.</p>
           <p>Stars below the horizon appear dimmed.</p>
           <p>The Milky Way band continues below the horizon, dimmed.</p>
@@ -374,6 +382,9 @@
         });
 
         const defaultCoordinates = { latitude: 47.6062, longitude: -122.3321 };
+        const isMobile =
+          /iPhone|iPod|Android.*Mobile|Mobile/i.test(navigator.userAgent) ||
+          matchMedia("(pointer: coarse) and (max-width: 700px)").matches;
         const state = (window.skyState = {
           ...defaultCoordinates,
           heading: 0,
@@ -389,6 +400,10 @@
           projectedLabels: [],
         });
         const startupScreen = $("startup-screen");
+        const startupTitle = $("startup-title");
+        const startupDescription = $("startup-description");
+        const startupSensorActions = $("startup-sensor-actions");
+        const enableSensorsButton = $("enable-sensors");
         const startupActions = $("startup-actions");
         const startupStatus = $("startup-status");
         const coordinateForm = $("startup-coordinate-form");
@@ -499,7 +514,21 @@
             showStartupChoices();
           }
         };
-        void useSavedLocationPermission();
+        if (isMobile) {
+          startupTitle.textContent = "Point your phone at the sky";
+          startupDescription.textContent =
+            "Allow access to your phone's accelerometer and compass so the sky follows where you point it. Sensor data stays on this device.";
+          startupStatus.textContent =
+            "Tap below to allow motion sensors. Your browser may show a permission prompt.";
+          startupSensorActions.hidden = false;
+          $("compass-status").textContent =
+            "Allow accelerometer and compass access to point the sky";
+          $("navigation-help").textContent =
+            "Move your phone to point the sky. Touch gestures do not pan the view.";
+          $("sensor-status").textContent = "MOTION SENSORS · NOT ENABLED";
+        } else {
+          void useSavedLocationPermission();
+        }
         const projectedLabels = new Map();
         const labelCategories = {
           "sun-moon": true,
@@ -604,39 +633,10 @@
           window.clearTimeout(turnFinishTimeout);
           state.manualActive = false;
         });
-        const isMobile =
-          matchMedia("(pointer: coarse)").matches ||
-          "ontouchstart" in window;
         const motionButton = $("motion-button");
 
         if (isMobile) {
           motionButton.hidden = false;
-          $("compass-status").textContent =
-            "Enable your compass to point the sky at the stars";
-          const canvas = $("sky-canvas");
-          let lastTouch = null;
-          canvas.addEventListener("pointerdown", (event) => {
-            lastTouch = { x: event.clientX, y: event.clientY };
-            canvas.setPointerCapture(event.pointerId);
-          });
-          canvas.addEventListener("pointermove", (event) => {
-            if (!lastTouch || state.sensorActive) return;
-            const deltaX = event.clientX - lastTouch.x;
-            const deltaY = event.clientY - lastTouch.y;
-            state.heading = (state.heading - deltaX * 0.3 + 360) % 360;
-            state.altitude = Math.max(
-              -85,
-              Math.min(85, state.altitude + deltaY * 0.3),
-            );
-            state.manualActive = true;
-            lastTouch = { x: event.clientX, y: event.clientY };
-          });
-          const endTouch = () => {
-            lastTouch = null;
-            state.manualActive = false;
-          };
-          canvas.addEventListener("pointerup", endTouch);
-          canvas.addEventListener("pointercancel", endTouch);
         }
 
         let orientationListening = false;
@@ -660,42 +660,58 @@
             : "COMPASS · RELATIVE HEADING";
         };
 
-        motionButton.addEventListener("click", async () => {
+        const enableSensors = async () => {
           try {
             searchOverride = false;
             state.manualActive = false;
             activeTurn = null;
             window.clearTimeout(turnFinishTimeout);
             const orientation = window.DeviceOrientationEvent;
-            if (
-              orientation &&
-              typeof orientation.requestPermission === "function"
-            ) {
-              const permission = await orientation.requestPermission();
-              if (permission !== "granted") {
-                $("compass-status").textContent =
-                  "Compass permission was not granted; drag or touch to explore instead";
-                return;
+            const motion = window.DeviceMotionEvent;
+            if (!orientation) {
+              $("compass-status").textContent =
+                "This browser does not provide compass readings";
+              $("sensor-status").textContent = "MOTION SENSORS · UNAVAILABLE";
+              return false;
+            }
+            const permissionRequests = [];
+            for (const sensor of [motion, orientation]) {
+              if (typeof sensor?.requestPermission === "function") {
+                permissionRequests.push(sensor.requestPermission());
               }
             }
-            if (!orientationListening && orientation) {
+            const permissions = await Promise.all(permissionRequests);
+            if (permissions.some((permission) => permission !== "granted")) {
+              $("compass-status").textContent =
+                "Motion sensor permission was not granted. The sky will not follow your phone.";
+              $("sensor-status").textContent = "MOTION SENSORS · PERMISSION DENIED";
+              return false;
+            }
+            if (!orientationListening) {
               window.addEventListener("deviceorientation", onOrientation, {
                 passive: true,
               });
               orientationListening = true;
-            } else if (!orientation) {
-              $("compass-status").textContent =
-                "This browser does not provide compass readings";
-              $("sensor-status").textContent = "COMPASS UNAVAILABLE";
-              return;
             }
             $("compass-status").textContent =
-              "Waiting for compass readings…";
+              "Waiting for accelerometer and compass readings…";
+            $("sensor-status").textContent = "MOTION SENSORS · WAITING";
+            return true;
           } catch {
             $("compass-status").textContent =
-              "Compass unavailable; drag or touch to explore instead";
-            $("sensor-status").textContent = "COMPASS UNAVAILABLE";
+              "Motion sensors are unavailable. The sky will not follow your phone.";
+            $("sensor-status").textContent = "MOTION SENSORS · UNAVAILABLE";
+            return false;
           }
+        };
+        motionButton.addEventListener("click", () => {
+          void enableSensors();
+        });
+        enableSensorsButton.addEventListener("click", async () => {
+          await enableSensors();
+          startupSensorActions.hidden = true;
+          startupStatus.textContent = "Checking your saved location…";
+          void useSavedLocationPermission();
         });
 
         const formatRa = (degrees) => {

@@ -6,11 +6,12 @@ choose whether to use location or enter coordinates. The coordinate fields start
 with a default location. The sky remains behind a loading screen until the
 location choice is resolved and the first mesh is built, so the initial sky uses
 the final selected coordinates.
-On phones and tablets, the optional compass view follows device orientation;
-on desktop, drag the sky with the mouse. Press F2 to view sky viewer information,
-F3 to toggle render diagnostics, and F4 to toggle label categories or search for
-an object and smoothly point the view toward it. Initial sky meshes build
-incrementally; frames longer than 100 ms are logged to the browser console.
+On phones, the startup prompt asks for accelerometer and compass access so the
+sky follows the direction you point your device; touch gestures do not pan the
+view. On desktop, drag the sky with the mouse. Press F2 to view sky viewer
+information, F3 to toggle render diagnostics, and F4 to toggle label categories
+or search for an object and smoothly point the view toward it. Initial sky meshes
+build incrementally; frames longer than 100 ms are logged to the browser console.
 Slow sky-update stages are timed separately, and browsers that support the Long
 Tasks API also report long-task attribution to help distinguish application
 work from browser or rendering stalls.
