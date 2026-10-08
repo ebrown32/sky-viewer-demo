@@ -765,17 +765,17 @@ fn browser_startup_ready() -> bool {
 }
 
 fn pan_with_mouse(
-    mut motion: EventReader<bevy::input::mouse::MouseMotion>,
+    mut motion: EventReader<bevy::window::CursorMoved>,
     buttons: Res<ButtonInput<MouseButton>>,
     mut view: ResMut<ViewDirection>,
 ) {
-    if view.sensor_active || view.manual_active {
-        return;
-    }
     for event in motion.read() {
-        if buttons.pressed(MouseButton::Left) {
-            view.azimuth_rad -= event.delta.x * 0.0035;
-            view.altitude_rad = (view.altitude_rad - event.delta.y * 0.0035)
+        if !view.sensor_active && !view.manual_active && buttons.pressed(MouseButton::Left) {
+            let Some(delta) = event.delta else {
+                continue;
+            };
+            view.azimuth_rad += delta.x * 0.0035;
+            view.altitude_rad = (view.altitude_rad - delta.y * 0.0035)
                 .clamp(-85.0_f32.to_radians(), 85.0_f32.to_radians());
         }
     }
@@ -1324,6 +1324,83 @@ fn update_coordinate_readout(view: &ViewDirection, latitude_deg: f64, sidereal_t
 mod tests {
     use super::*;
     use bevy::render::mesh::VertexAttributeValues;
+
+    #[test]
+    fn desktop_cursor_motion_yaws_and_pitches_independently() {
+        let mut app = App::new();
+        app.init_resource::<ViewDirection>()
+            .init_resource::<ButtonInput<MouseButton>>()
+            .add_event::<bevy::window::CursorMoved>()
+            .add_systems(Update, pan_with_mouse);
+        let window = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        let initial_altitude = app.world().resource::<ViewDirection>().altitude_rad;
+        for delta in [Vec2::new(60.0, 0.0), Vec2::new(0.0, -60.0)] {
+            let before = app.world().resource::<ViewDirection>();
+            let heading = before.azimuth_rad;
+            let altitude = before.altitude_rad;
+            app.world_mut().send_event(bevy::window::CursorMoved {
+                window,
+                position: Vec2::new(500.0, 400.0) + delta,
+                delta: Some(delta),
+            });
+            app.update();
+            let after = app.world().resource::<ViewDirection>();
+            assert!((after.azimuth_rad - heading - delta.x * 0.0035).abs() < 1.0e-6);
+            assert!((after.altitude_rad - altitude + delta.y * 0.0035).abs() < 1.0e-6);
+        }
+        let view = app.world().resource::<ViewDirection>();
+        assert!(view.azimuth_rad > 0.0);
+        assert!(view.altitude_rad > initial_altitude);
+    }
+
+    #[test]
+    fn desktop_cursor_motion_respects_buttons_overrides_and_pitch_limits() {
+        let mut app = App::new();
+        app.init_resource::<ViewDirection>()
+            .init_resource::<ButtonInput<MouseButton>>()
+            .add_event::<bevy::window::CursorMoved>()
+            .add_systems(Update, pan_with_mouse);
+        let window = app.world_mut().spawn_empty().id();
+        let initial_altitude = app.world().resource::<ViewDirection>().altitude_rad;
+        for (pressed, sensor_active, manual_active, delta) in [
+            (false, false, false, Some(Vec2::splat(60.0))),
+            (true, true, false, Some(Vec2::splat(60.0))),
+            (true, false, true, Some(Vec2::splat(60.0))),
+            (true, false, false, None),
+        ] {
+            if pressed {
+                app.world_mut()
+                    .resource_mut::<ButtonInput<MouseButton>>()
+                    .press(MouseButton::Left);
+            }
+            let mut view = app.world_mut().resource_mut::<ViewDirection>();
+            view.sensor_active = sensor_active;
+            view.manual_active = manual_active;
+            app.world_mut().send_event(bevy::window::CursorMoved {
+                window,
+                position: Vec2::ZERO,
+                delta,
+            });
+            app.update();
+            let view = app.world().resource::<ViewDirection>();
+            assert_eq!(view.azimuth_rad, 0.0);
+            assert_eq!(view.altitude_rad, initial_altitude);
+        }
+        for delta_y in [-1000.0, 1000.0] {
+            app.world_mut().send_event(bevy::window::CursorMoved {
+                window,
+                position: Vec2::ZERO,
+                delta: Some(Vec2::new(0.0, delta_y)),
+            });
+            app.update();
+            let view = app.world().resource::<ViewDirection>();
+            assert_eq!(view.azimuth_rad, 0.0);
+            assert_eq!(view.altitude_rad, -delta_y.signum() * 85.0_f32.to_radians());
+        }
+    }
 
     #[test]
     fn pitching_changes_elevation_without_changing_compass_heading() {

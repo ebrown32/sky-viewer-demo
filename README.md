@@ -12,7 +12,9 @@ view. Point the back of the phone (the rear-camera direction) at the sky:
 an upright portrait phone points at the horizon. Pitching it upward raises the
 view, and turning it toward east increases the compass bearing. Portrait and
 landscape use the same physical viewing direction; screen rotation and phone
-roll do not rotate the sky's horizon. On desktop, drag the sky with the mouse. Press F2 to view sky viewer
+roll do not rotate the sky's horizon. On desktop, hold the left mouse button and
+move right/left to yaw right/left, or up/down to pitch up/down. Mouse pitch is
+limited to 85 degrees above or below the horizon. Press F2 to view sky viewer
 information, F3 to toggle render diagnostics, and F4 to toggle label categories
 or search for an object and smoothly point the view toward it. Initial sky meshes
 build incrementally; frames longer than 100 ms are logged to the browser console.
@@ -52,8 +54,9 @@ rustc --edition=2021 --test src/astro.rs -o /tmp/sky-astro-tests
 /tmp/sky-astro-tests
 ```
 
-After a release build, run `node tests/browser-orientation.mjs` to verify raw
-sensor pitch/yaw sweeps, sideways phone poses, and rear-camera alignment with
+After a release build, run `node tests/browser-orientation.mjs` to verify desktop
+mouse yaw/pitch, button gating and pitch limits, raw sensor pitch/yaw sweeps,
+sideways phone poses, and rear-camera alignment with
 the rendered Moon and Polaris in headless Chromium. This requires Node.js 22+
 and Chromium (`CHROME_BIN` can override its executable). Set `SKY_TEST_URL` to
 check a deployed site instead of the local `dist` directory.

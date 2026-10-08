@@ -87,7 +87,7 @@ try {
   await send("Runtime.enable");
   await send("Page.enable");
   await send("Emulation.setDeviceMetricsOverride", {
-    width: 390, height: 844, deviceScaleFactor: 1, mobile: true,
+    width: 1000, height: 800, deviceScaleFactor: 1, mobile: false,
   });
   // Choose a fixed time when the Moon is above Seattle's horizon.
   await send("Page.addScriptToEvaluateOnNewDocument", {
@@ -100,7 +100,8 @@ try {
       if (await evaluate(expression)) return;
       await new Promise((done) => setTimeout(done, 100));
     }
-    throw new Error(`Timed out: ${expression}`);
+    const state = await evaluate("({ url: location.href, state: window.skyState, text: document.body.innerText })");
+    throw new Error(`Timed out: ${expression}\n${JSON.stringify({ state, errors })}`);
   };
   await waitFor("window.skyState?.skyReady && document.getElementById('startup-screen').hidden");
   const settle = async () => {
@@ -121,6 +122,80 @@ try {
     Math.abs(actual - expected) < tolerance, `${actual} != ${expected}`,
   );
   const headingClose = (actual, expected) => close(((actual - expected + 540) % 360) - 180, 0);
+  const readDirection = () => evaluate("({ heading: skyState.heading, altitude: skyState.altitude })");
+  const drag = async (dx, dy, button = "left") => {
+    const { x, y } = await evaluate("({ x: innerWidth / 2, y: innerHeight / 2 })");
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+    await settle();
+    if (button !== "none") {
+      await send("Input.dispatchMouseEvent", {
+        type: "mousePressed", x, y, button, clickCount: 1,
+      });
+      await settle();
+    }
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved", x: x + dx, y: y + dy,
+      button, buttons: button === "left" ? 1 : button === "right" ? 2 : 0,
+    });
+    await settle();
+    if (button !== "none") {
+      await send("Input.dispatchMouseEvent", {
+        type: "mouseReleased", x: x + dx, y: y + dy, button, clickCount: 1,
+      });
+      await settle();
+    }
+    return readDirection();
+  };
+  const mouseDegreesPerPixel = 0.0035 * 180 / Math.PI;
+  await evaluate("skyState.sensorActive = false; skyState.manualActive = false;");
+  await settle();
+  let beforeDrag = await readDirection();
+  for (const [dx, dy] of [[60, 0], [-60, 0], [0, -60], [0, 60], [40, -40]]) {
+    const afterDrag = await drag(dx, dy);
+    headingClose(afterDrag.heading, beforeDrag.heading + dx * mouseDegreesPerPixel);
+    close(afterDrag.altitude, beforeDrag.altitude - dy * mouseDegreesPerPixel);
+    beforeDrag = afterDrag;
+  }
+  for (const button of ["none", "right"]) {
+    const afterDrag = await drag(30, 30, button);
+    headingClose(afterDrag.heading, beforeDrag.heading);
+    close(afterDrag.altitude, beforeDrag.altitude);
+  }
+  for (const dy of [-350, -350, 350, 350, 350]) {
+    const afterDrag = await drag(0, dy);
+    headingClose(afterDrag.heading, beforeDrag.heading);
+    close(afterDrag.altitude, Math.max(-85, Math.min(85, beforeDrag.altitude - dy * mouseDegreesPerPixel)));
+    beforeDrag = afterDrag;
+  }
+  const centerDesktopMoon = async () => {
+    await evaluate(`(() => {
+      const moon = skyState.objects.find(object => object[0] === "Moon");
+      skyState.heading = moon[1];
+      skyState.altitude = moon[2];
+      skyState.manualActive = true;
+    })()`);
+    await settle();
+    const label = await evaluate("skyState.projectedLabels.find(label => label[0] === 'Moon')");
+    assert.ok(label, "Desktop Moon must be rendered");
+    close(label[1], 500, 1);
+    close(label[2], 400, 1);
+    await evaluate("skyState.manualActive = false;");
+    await settle();
+    return label;
+  };
+  let desktopCentered = await centerDesktopMoon();
+  await drag(0, -30);
+  const desktopPitched = await evaluate("skyState.projectedLabels.find(label => label[0] === 'Moon')");
+  close(desktopPitched[1], desktopCentered[1], 0.1);
+  assert.ok(desktopPitched[2] > desktopCentered[2] + 10, "Dragging up must pitch the camera up");
+  desktopCentered = await centerDesktopMoon();
+  await drag(30, 0);
+  const desktopYawed = await evaluate("skyState.projectedLabels.find(label => label[0] === 'Moon')");
+  assert.ok(desktopYawed[1] < desktopCentered[1] - 10, "Dragging right must yaw the camera right");
+  await send("Emulation.setDeviceMetricsOverride", {
+    width: 390, height: 844, deviceScaleFactor: 1, mobile: true,
+  });
+  await settle();
   let cases = 0;
   for (const heading of [0, 90, 123, 180, 270, 359]) {
     for (const beta of [5, 30, 60, 89, 90, 91, 120, 150, 175]) {
@@ -140,6 +215,10 @@ try {
       }
     }
   }
+  const sensorDirection = await apply(syntheticDeviceOrientation(123, 30));
+  const afterSensorDrag = await drag(30, -30);
+  headingClose(afterSensorDrag.heading, sensorDirection.heading);
+  close(afterSensorDrag.altitude, sensorDirection.altitude);
   await apply({ alpha: 270, beta: 120, gamma: 0, absolute: true }, "deviceorientationabsolute");
   const afterRelative = await apply({ alpha: 180, beta: 60, gamma: 0, absolute: false });
   headingClose(afterRelative.heading, 90);
@@ -190,7 +269,7 @@ try {
   const yawed = await evaluate("skyState.projectedLabels.find(label => label[0] === 'Moon')");
   assert.ok(yawed[1] > centered[1] + 10, "East must appear on the right");
   assert.deepEqual(errors, [], "Unexpected browser exceptions");
-  console.log(`Headless Chrome: ${cases} sensor poses passed; Moon/Polaris centered; below-horizon bodies rendered; pitch vertical; yaw unmirrored; absolute event preferred.`);
+  console.log(`Headless Chrome: desktop mouse yaw/pitch, button gating and pitch limits passed; ${cases} sensor poses passed; Moon/Polaris centered; below-horizon bodies rendered; pitch vertical; yaw unmirrored; absolute event preferred.`);
 } finally {
   socket?.close();
   chrome.kill();
