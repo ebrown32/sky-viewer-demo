@@ -91,7 +91,7 @@ try {
   });
   // Choose a fixed time when the Moon is above Seattle's horizon.
   await send("Page.addScriptToEvaluateOnNewDocument", {
-    source: "Date.now = () => 1791478800000;",
+    source: "Date.now = () => 1791464400000;",
   });
   await send("Page.navigate", { url: `${base}?sensor-test` });
   const waitFor = async (expression) => {
@@ -164,6 +164,18 @@ try {
     close(label[1], 195, 1);
     close(label[2], 422, 1);
   }
+  const belowHorizonBodies = await evaluate(`skyState.objects.filter(object =>
+    ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"]
+      .includes(object[0]) && object[2] < 0)`);
+  assert.ok(belowHorizonBodies.some((object) => object[0] === "Sun"),
+    `Sun should be below the horizon in this fixed-time test: ${JSON.stringify(belowHorizonBodies)}`);
+  for (const object of belowHorizonBodies) {
+    await apply(syntheticDeviceOrientation(object[1], object[2], 90));
+    const label = await evaluate(`skyState.projectedLabels.find(label => label[0] === ${JSON.stringify(object[0])})`);
+    assert.ok(label, `${object[0]} below the horizon not rendered`);
+    close(label[1], 195, 1);
+    close(label[2], 422, 1);
+  }
   const poleState = await apply(syntheticDeviceOrientation(0, 47.6062));
   close(poleState.dec, 90, 0.01);
 
@@ -178,7 +190,7 @@ try {
   const yawed = await evaluate("skyState.projectedLabels.find(label => label[0] === 'Moon')");
   assert.ok(yawed[1] > centered[1] + 10, "East must appear on the right");
   assert.deepEqual(errors, [], "Unexpected browser exceptions");
-  console.log(`Headless Chrome: ${cases} sensor poses passed; Moon/Polaris centered; pitch vertical; yaw unmirrored; absolute event preferred.`);
+  console.log(`Headless Chrome: ${cases} sensor poses passed; Moon/Polaris centered; below-horizon bodies rendered; pitch vertical; yaw unmirrored; absolute event preferred.`);
 } finally {
   socket?.close();
   chrome.kill();

@@ -213,16 +213,6 @@ impl LabelCategory {
     }
 }
 
-fn remains_visible_below_horizon(category: LabelCategory) -> bool {
-    matches!(
-        category,
-        LabelCategory::Constellation
-            | LabelCategory::Star
-            | LabelCategory::SagittariusA
-            | LabelCategory::Galaxy
-    )
-}
-
 #[derive(Clone, Copy)]
 enum BodyKind {
     Sun,
@@ -933,27 +923,17 @@ fn update_sky(
             observer.latitude_deg,
             sidereal_time,
         );
-        *visibility = if horizontal.altitude_deg > 0.0 {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
+        *visibility = Visibility::Visible;
         transform.translation = horizontal_vector(horizontal) * BODY_RADIUS;
     }
 
-    for (label, projected_label, mut transform, mut visibility) in &mut sky_labels {
+    for (label, _, mut transform, mut visibility) in &mut sky_labels {
         let horizontal = astro::equatorial_to_horizontal(
             label.0,
             observer.latitude_deg,
             sidereal_time,
         );
-        *visibility = if horizontal.altitude_deg > 0.0
-            || remains_visible_below_horizon(projected_label.category)
-        {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
+        *visibility = Visibility::Visible;
         set_label_transform(&mut transform, horizontal, SKY_RADIUS - 1.5);
     }
     #[cfg(target_arch = "wasm32")]
@@ -1419,15 +1399,6 @@ mod tests {
     fn update_sky_system_initializes_without_query_conflicts() {
         let mut system = bevy::ecs::system::IntoSystem::into_system(update_sky);
         system.initialize(&mut World::new());
-    }
-
-    #[test]
-    fn deep_sky_labels_remain_visible_below_horizon() {
-        assert!(remains_visible_below_horizon(LabelCategory::Constellation));
-        assert!(remains_visible_below_horizon(LabelCategory::Star));
-        assert!(remains_visible_below_horizon(LabelCategory::SagittariusA));
-        assert!(remains_visible_below_horizon(LabelCategory::Galaxy));
-        assert!(!remains_visible_below_horizon(LabelCategory::Planet));
     }
 
     #[test]

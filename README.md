@@ -19,6 +19,8 @@ build incrementally; frames longer than 100 ms are logged to the browser console
 Slow sky-update stages are timed separately, and browsers that support the Long
 Tasks API also report long-task attribution to help distinguish application
 work from browser or rendering stalls.
+Celestial bodies, stars, and deep-sky objects remain visible below the horizon
+when the view is pointed downward.
 
 ## Run locally
 
